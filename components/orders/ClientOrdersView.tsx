@@ -489,7 +489,7 @@ export default function ClientOrdersView() {
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={TABLE_HEADERS.length + 1} className="py-20 text-center">
+                  <td colSpan={ORDER_COLUMNS.length + 1} className="py-20 text-center">
                     <p className="text-slate-300 italic text-sm font-medium">No Data</p>
                   </td>
                 </tr>

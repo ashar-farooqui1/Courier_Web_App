@@ -1,5 +1,5 @@
 import { API_ROUTES } from '@/lib/api/config';
-import { apiGet, apiPostJson } from '@/lib/api/http';
+import { apiGet, apiPostJson, apiDelete } from '@/lib/api/http';
 import type {
   AssignClientServicePayload,
   AssignClientServiceResponse,
