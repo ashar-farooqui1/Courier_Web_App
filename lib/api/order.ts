@@ -1,6 +1,7 @@
 import { API_BASE_URL, API_ROUTES } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
+import { parseContentDispositionFilename } from '@/lib/format';
 import type {
   BulkUploadApiResponse,
   BulkUploadShipmentPreview,
@@ -398,5 +399,56 @@ export async function bulkUploadOrders(
   return {
     message: successMessage,
     shipments,
+  };
+}
+
+/** POST /api/Order/generate-awb — returns AWB PDF for the given order IDs. */
+export async function generateOrderAwb(
+  orderIds: number[],
+  token?: string
+): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/pdf',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.generateAwb}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ orderIds }),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get('Content-Type') ?? '';
+    let body: unknown;
+
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => undefined);
+    } else {
+      body = await response.text().catch(() => undefined);
+    }
+
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to generate AWB (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const blob = await response.blob();
+  const fallbackName =
+    orderIds.length === 1 ? `AWB-${orderIds[0]}.pdf` : `AWB-${orderIds.length}-orders.pdf`;
+
+  return {
+    blob,
+    filename: parseContentDispositionFilename(
+      response.headers.get('Content-Disposition'),
+      fallbackName
+    ),
   };
 }

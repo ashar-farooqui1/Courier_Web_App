@@ -14,3 +14,19 @@ export function formatStatusLabel(status: string): string {
   if (!status) return '—';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
 }
+
+export function parseContentDispositionFilename(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim());
+    } catch {
+      return utf8Match[1].trim();
+    }
+  }
+
+  const filenameMatch = header.match(/filename="?([^";]+)"?/i);
+  return filenameMatch?.[1]?.trim() || fallback;
+}

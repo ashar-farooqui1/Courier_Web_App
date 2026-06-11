@@ -26,6 +26,7 @@ export const API_ROUTES = {
   ordersByClient: (clientId: number | string) =>
     `/api/Order/GetOrdersByClient?clientId=${clientId}`,
   bulkUploadOrders: "/api/Order/BulkUpload",
+  generateAwb: "/api/Order/generate-awb",
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",

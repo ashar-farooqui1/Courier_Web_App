@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
 import { useAuthSession } from "@/hooks/useAuthRole";
+import { parseContentDispositionFilename } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
 const Modal = ({
   isOpen,
@@ -56,14 +57,21 @@ const ActionButton = ({
   icon: Icon,
   label,
   onClick,
+  disabled = false,
 }: {
   icon: React.ComponentType<{ size?: number }>;
   label: string;
   onClick?: () => void;
+  disabled?: boolean;
 }) => (
   <button
+    type="button"
     onClick={onClick}
-    className="flex items-center gap-2 px-4 py-2.5 rounded bg-primary text-white text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 shadow-sm hover:bg-primary/90"
+    disabled={disabled}
+    className={cn(
+      "flex items-center gap-2 px-4 py-2.5 rounded bg-primary text-white text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 shadow-sm hover:bg-primary/90",
+      disabled && "opacity-50 cursor-not-allowed hover:bg-primary active:scale-100"
+    )}
   >
     <Icon size={14} />
     {label}
@@ -225,7 +233,10 @@ export default function ClientOrdersView() {
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [generatingAwb, setGeneratingAwb] = useState(false);
 
   const toggleModal = (key: keyof typeof modalStates, val: boolean) => {
     setModalStates((prev) => ({ ...prev, [key]: val }));
@@ -306,6 +317,111 @@ export default function ClientOrdersView() {
     loadOrders();
   };
 
+  const visibleOrderIds = useMemo(
+    () => filteredOrders.map((order) => order.orderId),
+    [filteredOrders]
+  );
+
+  const allVisibleSelected =
+    visibleOrderIds.length > 0 && visibleOrderIds.every((orderId) => selectedOrderIds.has(orderId));
+  const someVisibleSelected = visibleOrderIds.some((orderId) => selectedOrderIds.has(orderId));
+
+  const toggleOrderSelection = (orderId: number) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllVisible = () => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      visibleOrderIds.forEach((orderId) => next.add(orderId));
+      return next;
+    });
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedOrderIds(new Set());
+  };
+
+  const handleToggleAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedOrderIds((prev) => {
+        const next = new Set(prev);
+        visibleOrderIds.forEach((orderId) => next.delete(orderId));
+        return next;
+      });
+      return;
+    }
+
+    handleSelectAllVisible();
+  };
+
+  const handleAwbPrint = async () => {
+    if (!token) {
+      setActionError("Client session not found. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to print AWB.");
+      return;
+    }
+
+    setGeneratingAwb(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/generate-awb", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? `Failed to generate AWB (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const fallbackName =
+        orderIds.length === 1 ? `AWB-${orderIds[0]}.pdf` : `AWB-${orderIds.length}-orders.pdf`;
+      const filename = parseContentDispositionFilename(
+        response.headers.get("Content-Disposition"),
+        fallbackName
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      setSuccessMessage(
+        orderIds.length === 1
+          ? "AWB PDF downloaded successfully."
+          : `AWB PDF downloaded for ${orderIds.length} orders.`
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to generate AWB");
+    } finally {
+      setGeneratingAwb(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -313,7 +429,12 @@ export default function ClientOrdersView() {
         <div className="flex flex-wrap gap-2">
           <ActionButton icon={Import} label="Import" onClick={() => router.push("/orders/import")} />
           <ActionButton icon={FileText} label="Loadsheet" />
-          <ActionButton icon={Printer} label="AWB Print" />
+          <ActionButton
+            icon={Printer}
+            label={generatingAwb ? "Generating…" : "AWB Print"}
+            onClick={handleAwbPrint}
+            disabled={generatingAwb || loadingOrders}
+          />
           <ActionButton icon={Plus} label="Add New" onClick={() => toggleModal("addNew", true)} />
           <ActionButton icon={Truck} label="Pickup Request" onClick={() => toggleModal("pickup", true)} />
         </div>
@@ -325,8 +446,21 @@ export default function ClientOrdersView() {
         onSuccess={handleOrderCreated}
       />
 
-      {(ordersError || successMessage) && (
+      {(ordersError || actionError || successMessage) && (
         <div className="space-y-3">
+          {actionError && (
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+              <span>{actionError}</span>
+              <button
+                type="button"
+                onClick={() => setActionError(null)}
+                className="shrink-0 p-1 hover:bg-red-100 rounded-full transition-colors"
+                aria-label="Dismiss message"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
           {ordersError && (
             <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
               <span>{ordersError}</span>
@@ -425,10 +559,20 @@ export default function ClientOrdersView() {
               <span className="text-[11px] font-bold text-slate-500 uppercase">entries</span>
             </div>
             <div className="flex gap-2">
-              <button className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors">
+              <button
+                type="button"
+                onClick={handleSelectAllVisible}
+                disabled={visibleOrderIds.length === 0}
+                className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Select All
               </button>
-              <button className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors">
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                disabled={selectedOrderIds.size === 0}
+                className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Deselect All
               </button>
             </div>
@@ -464,7 +608,16 @@ export default function ClientOrdersView() {
                 <th className="p-4 w-10">
                   <input
                     type="checkbox"
+                    checked={allVisibleSelected}
+                    ref={(input) => {
+                      if (input) {
+                        input.indeterminate = someVisibleSelected && !allVisibleSelected;
+                      }
+                    }}
+                    onChange={handleToggleAllVisible}
+                    disabled={visibleOrderIds.length === 0}
                     className="rounded border-slate-300 text-primary focus:ring-primary"
+                    aria-label="Select all visible orders"
                   />
                 </th>
                 {ORDER_COLUMNS.map((column) => (
@@ -502,7 +655,10 @@ export default function ClientOrdersView() {
                     <td className="p-4">
                       <input
                         type="checkbox"
+                        checked={selectedOrderIds.has(order.orderId)}
+                        onChange={() => toggleOrderSelection(order.orderId)}
                         className="rounded border-slate-300 text-primary focus:ring-primary"
+                        aria-label={`Select order ${order.awbNo || order.orderId}`}
                       />
                     </td>
                     {ORDER_COLUMNS.map((column) => (
