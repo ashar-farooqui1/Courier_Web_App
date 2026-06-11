@@ -6,6 +6,36 @@ export type LoginRole = "client" | "admin" | "super-admin" | "rider";
 const ROLE_KEY = "courier_login_role";
 const USER_KEY = "courier_auth_user";
 const TOKEN_KEY = "courier_auth_token";
+const REMEMBER_KEY = "courier_remember_me";
+
+const SESSION_KEYS = [ROLE_KEY, USER_KEY, TOKEN_KEY] as const;
+
+function readSessionFrom(storage: Storage): AuthSession | null {
+  const role = storage.getItem(ROLE_KEY);
+  if (role !== "client" && role !== "admin" && role !== "super-admin" && role !== "rider") {
+    return null;
+  }
+
+  const raw = storage.getItem(USER_KEY);
+  if (!raw) return null;
+
+  try {
+    const user = JSON.parse(raw) as AuthUser;
+    return {
+      role,
+      user,
+      token: storage.getItem(TOKEN_KEY) ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearStorageKeys(storage: Storage): void {
+  for (const key of SESSION_KEYS) {
+    storage.removeItem(key);
+  }
+}
 
 export interface AuthSession {
   role: LoginRole;
@@ -13,15 +43,32 @@ export interface AuthSession {
   token?: string;
 }
 
-export function saveAuthSession(session: AuthSession): void {
+export function saveAuthSession(session: AuthSession, remember = false): void {
   if (typeof window === "undefined") return;
-  sessionStorage.setItem(ROLE_KEY, session.role);
-  sessionStorage.setItem(USER_KEY, JSON.stringify(session.user));
+
+  const storage = remember ? localStorage : sessionStorage;
+  const otherStorage = remember ? sessionStorage : localStorage;
+
+  storage.setItem(ROLE_KEY, session.role);
+  storage.setItem(USER_KEY, JSON.stringify(session.user));
   if (session.token) {
-    sessionStorage.setItem(TOKEN_KEY, session.token);
+    storage.setItem(TOKEN_KEY, session.token);
   } else {
-    sessionStorage.removeItem(TOKEN_KEY);
+    storage.removeItem(TOKEN_KEY);
   }
+
+  clearStorageKeys(otherStorage);
+
+  if (remember) {
+    localStorage.setItem(REMEMBER_KEY, "true");
+  } else {
+    localStorage.removeItem(REMEMBER_KEY);
+  }
+}
+
+export function isRememberMeEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(REMEMBER_KEY) === "true";
 }
 
 /** @deprecated Use saveAuthSession */
@@ -39,28 +86,15 @@ export function saveLoginSession(role: LoginRole, username: string): void {
 }
 
 export function getStoredRole(): LoginRole | null {
-  if (typeof window === "undefined") return null;
-  const role = sessionStorage.getItem(ROLE_KEY);
-  if (role === "client" || role === "admin" || role === "super-admin" || role === "rider") {
-    return role;
-  }
-  return null;
+  return getAuthSession()?.role ?? null;
 }
 
 export function getStoredUser(): AuthUser | null {
-  if (typeof window === "undefined") return null;
-  const raw = sessionStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AuthUser;
-  } catch {
-    return null;
-  }
+  return getAuthSession()?.user ?? null;
 }
 
 export function getStoredToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return sessionStorage.getItem(TOKEN_KEY);
+  return getAuthSession()?.token ?? null;
 }
 
 /** @deprecated Use getStoredUser()?.displayName */
@@ -72,21 +106,23 @@ export function getStoredUsername(): string {
 }
 
 export function getAuthSession(): AuthSession | null {
-  const role = getStoredRole();
-  const user = getStoredUser();
-  if (!role || !user) return null;
-  return {
-    role,
-    user,
-    token: getStoredToken() ?? undefined,
-  };
+  if (typeof window === "undefined") return null;
+  return readSessionFrom(localStorage) ?? readSessionFrom(sessionStorage);
 }
 
 export function clearLoginSession(): void {
   if (typeof window === "undefined") return;
-  sessionStorage.removeItem(ROLE_KEY);
-  sessionStorage.removeItem(USER_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
+  clearStorageKeys(localStorage);
+  clearStorageKeys(sessionStorage);
+  localStorage.removeItem(REMEMBER_KEY);
+}
+
+/** Clears all auth data (including localStorage) and redirects to login. */
+export function logout(): void {
+  clearLoginSession();
+  if (typeof window !== "undefined") {
+    window.location.href = "/";
+  }
 }
 
 /** Client UI for Client and Rider (rider design not built yet). */

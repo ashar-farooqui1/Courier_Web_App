@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Smartphone,
@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import AppLogo from '@/components/AppLogo';
-import { clearLoginSession } from "@/lib/auth/role";
+import { logout } from "@/lib/auth/role";
 
 interface SidebarItemProps {
   icon: React.ReactNode;
@@ -96,11 +96,9 @@ const Sidebar = () => {
   const [isHovered, setIsHovered] = useState(false);
   const [openMenus, setOpenMenus] = useState<string[]>([]);
   const pathname = usePathname();
-  const router = useRouter();
 
   const handleLogout = () => {
-    clearLoginSession();
-    router.push('/');
+    logout();
   };
 
   const toggleMenu = (label: string) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Mail, Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import AppLogo from "@/components/AppLogo";
 import OtpVerificationForm from "@/components/OtpVerificationForm";
 import { useRouter } from "next/navigation";
 import { EmailNotVerifiedError, isEmailNotVerifiedError, login } from "@/lib/api/auth";
-import { saveAuthSession } from "@/lib/auth/role";
+import { isRememberMeEnabled, saveAuthSession } from "@/lib/auth/role";
 
 const LoginForm = () => {
   const router = useRouter();
@@ -19,6 +19,11 @@ const LoginForm = () => {
   const [loading, setLoading] = useState(false);
   const [showOtpVerification, setShowOtpVerification] = useState(false);
   const [otpInfoMessage, setOtpInfoMessage] = useState("");
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
+
+  useEffect(() => {
+    setKeepSignedIn(isRememberMeEnabled());
+  }, []);
 
   const attemptLogin = async (loginEmail: string, loginPassword: string) => {
     const session = await login({
@@ -26,7 +31,7 @@ const LoginForm = () => {
       password: loginPassword,
     });
 
-    saveAuthSession(session);
+    saveAuthSession(session, keepSignedIn);
     router.push("/dashboard");
   };
 
@@ -176,6 +181,8 @@ const LoginForm = () => {
             <label className="flex items-center gap-3 cursor-pointer group">
               <input
                 type="checkbox"
+                checked={keepSignedIn}
+                onChange={(e) => setKeepSignedIn(e.target.checked)}
                 className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all cursor-pointer"
                 disabled={loading}
               />

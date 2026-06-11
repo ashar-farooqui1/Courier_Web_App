@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Banknote,
@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AppLogo from "@/components/AppLogo";
-import { clearLoginSession } from "@/lib/auth/role";
+import { logout } from "@/lib/auth/role";
 
 interface ClientNavItem {
   icon: React.ReactNode;
@@ -92,11 +92,8 @@ const SidebarItem = ({ icon, label, href, isHovered, active, indent }: SidebarIt
 const ClientSidebar = () => {
   const [isHovered, setIsHovered] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
-
   const handleLogout = () => {
-    clearLoginSession();
-    router.push("/");
+    logout();
   };
 
   const isActive = (href: string) => {
