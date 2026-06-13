@@ -17,6 +17,14 @@ export function parseApiErrorMessage(
       return record.message;
     }
 
+    if (typeof record.title === "string" && record.title) {
+      const validationMessages = extractValidationMessages(record.errors);
+      if (validationMessages.length > 0) {
+        return validationMessages.join(" ");
+      }
+      return record.title;
+    }
+
     if (typeof record.error === "string" && record.error) {
       try {
         return parseApiErrorMessage(JSON.parse(record.error), record.error);
@@ -27,4 +35,16 @@ export function parseApiErrorMessage(
   }
 
   return fallback;
+}
+
+function extractValidationMessages(errors: unknown): string[] {
+  if (!errors || typeof errors !== "object") return [];
+
+  return Object.values(errors as Record<string, unknown>).flatMap((value) => {
+    if (typeof value === "string" && value) return [value];
+    if (Array.isArray(value)) {
+      return value.filter((entry): entry is string => typeof entry === "string" && Boolean(entry));
+    }
+    return [];
+  });
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient, getClients } from '@/lib/api/clients';
+import { parseApiErrorMessage } from '@/lib/api/errors';
 import { ApiError } from '@/lib/api/http';
 
 /** Proxies GET https://api-courier.threecircle.io/api/Client (avoids browser CORS). */
@@ -28,9 +29,11 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {
-      const details = error.body as { message?: string } | undefined;
       return NextResponse.json(
-        { message: details?.message ?? error.message, details: error.body },
+        {
+          message: parseApiErrorMessage(error.body, error.message),
+          details: error.body,
+        },
         { status: error.status }
       );
     }

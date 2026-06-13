@@ -60,9 +60,7 @@ export function buildClientFormData(
   append('BaseTown', values.baseTown);
   append('City', values.city);
 
-  if (options?.services === null) {
-    formData.append('Services', '');
-  } else {
+  if (options?.services !== null) {
     append('Services', values.services);
   }
 
