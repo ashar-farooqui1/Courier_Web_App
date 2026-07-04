@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createOrder, getOrdersByClient } from '@/lib/api/order';
+import { createOrder, getOrders } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
+import {
+  readAppRequestContext,
+  resolveOrdersClientId,
+  resolveWriteClientId,
+} from '@/lib/api/app-request-context';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -24,7 +29,7 @@ function getBearerToken(request: Request): string | undefined {
   return token || undefined;
 }
 
-/** Proxies GET /api/Order/GetOrdersByClient?clientId={clientId} */
+/** Proxies GET /api/Order/GetOrders (optional ?clientId=) */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
 
@@ -33,14 +38,25 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const clientId = Number(searchParams.get('clientId'));
+  const clientIdParam = searchParams.get('clientId');
+  const clientId = clientIdParam ? Number(clientIdParam) : undefined;
 
-  if (!Number.isInteger(clientId) || clientId < 1) {
+  if (
+    clientIdParam &&
+    (clientId === undefined || !Number.isInteger(clientId) || clientId < 1)
+  ) {
     return NextResponse.json({ message: 'Invalid client ID' }, { status: 400 });
   }
 
+  const ctx = readAppRequestContext(request);
+  const scoped = resolveOrdersClientId(ctx, clientId);
+
+  if (scoped.error) {
+    return NextResponse.json({ message: scoped.error }, { status: scoped.status ?? 403 });
+  }
+
   try {
-    const orders = await getOrdersByClient(clientId, token);
+    const orders = await getOrders(token, scoped.clientId);
     return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {
@@ -71,7 +87,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Invalid request body' }, { status: 400 });
     }
 
-    const clientId = readNumber(body.clientId);
+    const requestedClientId = readNumber(body.clientId);
     const pickupLocationId = readNumber(body.pickupLocationId);
     const serviceId = readNumber(body.serviceId);
     const originCityId = readNumber(body.originCityId);
@@ -80,9 +96,14 @@ export async function POST(request: Request) {
     const customerPhone = readString(body.customerPhone);
     const deliveryAddress = readString(body.deliveryAddress);
 
-    if (clientId < 1) {
-      return NextResponse.json({ message: 'Invalid client ID' }, { status: 400 });
+    const ctx = readAppRequestContext(request);
+    const scoped = resolveWriteClientId(ctx, requestedClientId);
+
+    if (scoped.error) {
+      return NextResponse.json({ message: scoped.error }, { status: scoped.status ?? 403 });
     }
+
+    const clientId = scoped.clientId;
 
     if (pickupLocationId < 1) {
       return NextResponse.json({ message: 'Please select a pickup location' }, { status: 400 });

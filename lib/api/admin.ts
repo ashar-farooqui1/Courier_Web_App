@@ -1,10 +1,26 @@
 import { API_ROUTES } from "@/lib/api/config";
-import { apiDelete, apiGet, apiPostForm, apiPutForm } from "@/lib/api/http";
+import { apiDelete, apiGet, apiPostForm, apiPostJson, apiPutForm } from "@/lib/api/http";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { Admin, UpdateAdminPayload } from "@/types/admin";
 
+interface AdminsApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: Admin[];
+  details?: unknown;
+}
+
+function unwrapAdmins(response: AdminsApiResponse | Admin[]): Admin[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return Array.isArray(response.data) ? response.data : [];
+}
+
 export async function getAllAdmins(): Promise<Admin[]> {
-  return apiGet<Admin[]>(API_ROUTES.admins);
+  const response = await apiGet<AdminsApiResponse | Admin[]>(API_ROUTES.admins);
+  return unwrapAdmins(response);
 }
 
 export async function getAdminById(adminId: number): Promise<Admin> {

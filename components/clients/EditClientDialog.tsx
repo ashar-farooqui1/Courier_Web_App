@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { useEffect, useState } from 'react';
 import { ClientFormFields } from '@/components/clients/ClientFormFields';
@@ -9,7 +9,8 @@ import {
   DialogFormFooter,
   DialogLoading,
 } from '@/components/ui/AppDialog';
-import { buildClientFormData, clientToFormValues } from '@/lib/clients/client-form';
+import { buildClientUpdatePayload, clientToFormValues } from '@/lib/clients/client-form';
+import { parseApiErrorMessage } from '@/lib/api/errors';
 import type { CreateClientFormValues } from '@/lib/types/create-client';
 import type { Client } from '@/lib/types/client';
 
@@ -89,18 +90,34 @@ export function EditClientDialog({
     try {
       const response = await fetch(`/api/clients/${clientId}`, {
         method: 'PUT',
-        body: buildClientFormData(values, logoFile),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildClientUpdatePayload(values)),
       });
 
-      const payload = (await response.json().catch(() => null)) as {
-        message?: string;
-      } | null;
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? `Failed to update client (${response.status})`);
+        throw new Error(parseApiErrorMessage(payload, `Failed to update client (${response.status})`));
       }
 
-      onSuccess(payload?.message ?? 'Client updated successfully');
+      if (logoFile) {
+        const logoForm = new FormData();
+        logoForm.append('logo', logoFile);
+
+        const logoResponse = await fetch(`/api/clients/${clientId}`, {
+          method: 'POST',
+          body: logoForm,
+        });
+
+        if (!logoResponse.ok) {
+          const logoBody = await logoResponse.json().catch(() => ({}));
+          throw new Error(
+            parseApiErrorMessage(logoBody, 'Client updated but logo upload failed')
+          );
+        }
+      }
+
+      onSuccess(payload.message ?? 'Client updated successfully');
       onClose();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to update client');

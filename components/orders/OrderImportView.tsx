@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
+import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import type { BulkUploadShipmentPreview } from "@/lib/types/order";
 import type { ClientCity } from "@/lib/types/client-city";
 import type { PickupLocation } from "@/lib/types/pickup-location";
@@ -86,8 +87,7 @@ function ReferenceDropdown({
 }
 
 export function OrderImportView() {
-  const { user, token, ready } = useAuthSession();
-  const clientId = user?.userId ?? 0;
+  const { user, token, ready, clientId, role } = useAuthSession();
   const clientLabel =
     [user?.displayName?.trim(), clientId > 0 ? String(clientId) : ""]
       .filter(Boolean)
@@ -254,9 +254,7 @@ export function OrderImportView() {
 
       const response = await fetch("/api/orders/bulk-upload", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildAppAuthHeaders(token, role, clientId),
         body: formData,
       });
 

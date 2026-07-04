@@ -17,8 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
 import { useAuthSession } from "@/hooks/useAuthRole";
+import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseContentDispositionFilename } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
+import { ORDER_COLUMNS } from "@/components/orders/order-columns";
+
 const Modal = ({
   isOpen,
   onClose,
@@ -167,63 +170,9 @@ const OrderFilter = ({
   </div>
 );
 
-function formatOrderDate(value: string): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatAmount(value: number): string {
-  if (!Number.isFinite(value)) return "—";
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-}
-
-const ORDER_COLUMNS: {
-  label: string;
-  render: (order: ClientOrder) => React.ReactNode;
-  cellClassName?: string;
-}[] = [
-  {
-    label: "AWB No",
-    cellClassName: "font-bold text-primary",
-    render: (order) => order.awbNo || "—",
-  },
-  { label: "Client Name", render: (order) => order.clientName || "—" },
-  { label: "Customer Name", render: (order) => order.customerName || "—" },
-  { label: "Customer Phone", render: (order) => order.customerPhone || "—" },
-  { label: "Amount", render: (order) => formatAmount(order.amount) },
-  { label: "Product Name", render: (order) => order.productName || "—" },
-  { label: "Customer Reference", render: (order) => order.customerReference || "—" },
-  { label: "Service", render: (order) => order.serviceName || "—" },
-  { label: "Weight", render: (order) => order.weight || "—" },
-  { label: "Order Time & Date", render: (order) => formatOrderDate(order.orderDate) },
-  {
-    label: "Status",
-    render: (order) => (
-      <span className="inline-flex px-2 py-1 rounded bg-amber-50 text-amber-700 text-[10px] font-bold uppercase">
-        {order.status || "—"}
-      </span>
-    ),
-  },
-  { label: "Destination City", render: (order) => order.destinationCity || "—" },
-  { label: "Origin City", render: (order) => order.originCity || "—" },
-  { label: "Warehouse", render: (order) => order.warehouse || "—" },
-];
-
 export default function ClientOrdersView() {
   const router = useRouter();
-  const { user, token, ready } = useAuthSession();
-  const clientId = user?.userId ?? 0;
+  const { token, clientId, role, ready } = useAuthSession();
 
   const [modalStates, setModalStates] = useState({
     addNew: false,
@@ -237,6 +186,7 @@ export default function ClientOrdersView() {
   const [tableSearch, setTableSearch] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [generatingAwb, setGeneratingAwb] = useState(false);
+  const [finalizingOrders, setFinalizingOrders] = useState(false);
 
   const toggleModal = (key: keyof typeof modalStates, val: boolean) => {
     setModalStates((prev) => ({ ...prev, [key]: val }));
@@ -257,10 +207,7 @@ export default function ClientOrdersView() {
 
     try {
       const response = await fetch(`/api/orders?clientId=${clientId}`, {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildAppAuthHeaders(token, role, clientId),
       });
 
       const payload = (await response.json().catch(() => null)) as
@@ -281,7 +228,7 @@ export default function ClientOrdersView() {
     } finally {
       setLoadingOrders(false);
     }
-  }, [clientId, ready, token]);
+  }, [clientId, ready, role, token]);
 
   useEffect(() => {
     loadOrders();
@@ -382,10 +329,9 @@ export default function ClientOrdersView() {
     try {
       const response = await fetch("/api/orders/generate-awb", {
         method: "POST",
-        headers: {
+        headers: buildAppAuthHeaders(token, role, clientId, {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        }),
         body: JSON.stringify({ orderIds }),
       });
 
@@ -419,6 +365,52 @@ export default function ClientOrdersView() {
       setActionError(err instanceof Error ? err.message : "Failed to generate AWB");
     } finally {
       setGeneratingAwb(false);
+    }
+  };
+
+  const handleFinalizeOrders = async () => {
+    if (!token) {
+      setActionError("Client session not found. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to finalize.");
+      return;
+    }
+
+    setFinalizingOrders(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/update-status", {
+        method: "PUT",
+        headers: buildAppAuthHeaders(token, role, clientId, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ orderIds, status: "Finalize" }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to finalize orders (${response.status})`);
+      }
+
+      setSelectedOrderIds(new Set());
+      setSuccessMessage(
+        payload?.message ??
+          (orderIds.length === 1
+            ? "Order finalized successfully."
+            : `${orderIds.length} orders finalized successfully.`)
+      );
+      await loadOrders();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to finalize orders");
+    } finally {
+      setFinalizingOrders(false);
     }
   };
 
@@ -580,9 +572,14 @@ export default function ClientOrdersView() {
 
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex gap-2">
-              <button className="h-8 px-4 bg-green-500 text-white text-[10px] font-bold rounded uppercase flex items-center gap-1.5 hover:bg-green-600 transition-colors">
+              <button
+                type="button"
+                onClick={handleFinalizeOrders}
+                disabled={finalizingOrders || loadingOrders || selectedOrderIds.size === 0}
+                className="h-8 px-4 bg-green-500 text-white text-[10px] font-bold rounded uppercase flex items-center gap-1.5 hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 <Check size={12} />
-                Finalize
+                {finalizingOrders ? "Finalizing…" : "Finalize"}
               </button>
               <button className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase flex items-center gap-1.5 hover:bg-primary/90 transition-colors">
                 <Check size={12} />

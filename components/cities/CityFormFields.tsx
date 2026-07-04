@@ -3,20 +3,20 @@
 import React from "react";
 import { dialogInputClass, dialogLabelClass } from "@/components/ui/dialog-styles";
 import type { CreateCityPayload } from "@/lib/types/city";
-import type { Service } from "@/lib/types/service";
+import type { Zone } from "@/lib/types/zone";
 
 interface CityFormFieldsProps {
   values: CreateCityPayload;
-  services: Service[];
+  zones: Zone[];
   onChange: <K extends keyof CreateCityPayload>(field: K, value: CreateCityPayload[K]) => void;
-  servicePlaceholder?: string;
+  zonePlaceholder?: string;
 }
 
 export function CityFormFields({
   values,
-  services,
+  zones,
   onChange,
-  servicePlaceholder = "Select Service",
+  zonePlaceholder = "Select Zone",
 }: CityFormFieldsProps) {
   return (
     <>
@@ -33,19 +33,19 @@ export function CityFormFields({
       </div>
 
       <div className="space-y-1.5">
-        <label className={dialogLabelClass}>Service *</label>
+        <label className={dialogLabelClass}>Zone *</label>
         <select
-          value={values.serviceId || ""}
-          onChange={(e) => onChange("serviceId", Number(e.target.value))}
+          value={values.zoneId || ""}
+          onChange={(e) => onChange("zoneId", Number(e.target.value))}
           className={dialogInputClass}
           required
         >
           <option value="" disabled>
-            {servicePlaceholder}
+            {zonePlaceholder}
           </option>
-          {services.map((service) => (
-            <option key={service.serviceId} value={service.serviceId}>
-              {service.serviceName}
+          {zones.map((zone) => (
+            <option key={zone.zoneId} value={zone.zoneId}>
+              {zone.zoneName}
             </option>
           ))}
         </select>

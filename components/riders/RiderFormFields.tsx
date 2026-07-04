@@ -7,6 +7,7 @@ import {
   dialogLabelClass,
 } from "@/components/ui/dialog-styles";
 import type { CreateRiderFormValues } from "@/lib/types/create-rider";
+import type { City } from "@/lib/types/city";
 
 interface RiderFormFieldsProps {
   values: CreateRiderFormValues;
@@ -17,6 +18,7 @@ interface RiderFormFieldsProps {
   onLicenseChange: (file: File | null) => void;
   existingImageUrl?: string | null;
   existingLicenseRef?: string | null;
+  cities?: City[];
 }
 
 export function RiderFormFields({
@@ -28,6 +30,7 @@ export function RiderFormFields({
   onLicenseChange,
   existingImageUrl,
   existingLicenseRef,
+  cities,
 }: RiderFormFieldsProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -92,12 +95,27 @@ export function RiderFormFields({
 
       <div className="space-y-1">
         <label className={dialogLabelClass}>City</label>
-        <input
-          type="text"
-          value={values.city}
-          onChange={(e) => onChange("city", e.target.value)}
-          className={dialogInputClass}
-        />
+        {cities ? (
+          <select
+            value={values.city}
+            onChange={(e) => onChange("city", e.target.value)}
+            className={dialogInputClass}
+          >
+            <option value="">Select City</option>
+            {cities.map((city) => (
+              <option key={city.cityId} value={city.cityName}>
+                {city.cityName}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            value={values.city}
+            onChange={(e) => onChange("city", e.target.value)}
+            className={dialogInputClass}
+          />
+        )}
       </div>
 
       <div className="space-y-1">

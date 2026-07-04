@@ -4,9 +4,12 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
+import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import type { CreateOrderPayload, OrderPickupLocationDetails } from "@/lib/types/order";
-import type { ClientCity } from "@/lib/types/client-city";
+import type { City } from "@/lib/types/city";
+import type { Client } from "@/lib/types/client";
 import type { PickupLocation } from "@/lib/types/pickup-location";
+import type { Service } from "@/lib/types/service";
 
 const inputClass =
   "w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-slate-300 disabled:opacity-70 disabled:cursor-not-allowed";
@@ -52,43 +55,88 @@ interface AddClientOrderDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (message: string) => void;
+  variant?: "client" | "admin";
 }
 
 export function AddClientOrderDialog({
   isOpen,
   onClose,
   onSuccess,
+  variant = "client",
 }: AddClientOrderDialogProps) {
-  const { user, token, ready } = useAuthSession();
-  const clientId = user?.userId ?? 0;
+  const { token, ready, clientId: sessionClientId, role } = useAuthSession();
+  const isAdmin = variant === "admin";
 
   const [form, setForm] = useState(initialForm);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
-  const [cities, setCities] = useState<ClientCity[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+  const [loadingClients, setLoadingClients] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
   const [loadingCities, setLoadingCities] = useState(false);
+  const [clientsError, setClientsError] = useState<string | null>(null);
   const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [servicesError, setServicesError] = useState<string | null>(null);
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [selectedPickupLocationId, setSelectedPickupLocationId] = useState("");
+  const [selectedServiceId, setSelectedServiceId] = useState("");
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pickupDetails, setPickupDetails] = useState<OrderPickupLocationDetails | null>(null);
 
+  const effectiveClientId = isAdmin ? Number(selectedClientId) : sessionClientId;
+
   const resetForm = useCallback(() => {
     setForm(initialForm);
+    setSelectedClientId("");
     setSelectedPickupLocationId("");
+    setSelectedServiceId("");
     setPickupDetails(null);
+    setPickupLocations([]);
+    setServices([]);
     setDetailsError(null);
+    setClientsError(null);
     setLocationsError(null);
+    setServicesError(null);
     setCitiesError(null);
     setSubmitError(null);
   }, []);
 
-  const loadPickupLocations = useCallback(async () => {
+  const loadClients = useCallback(async () => {
+    if (!isAdmin) return;
+
+    setLoadingClients(true);
+    setClientsError(null);
+
+    try {
+      const response = await fetch("/api/clients");
+      const payload = (await response.json().catch(() => null)) as
+        | Client[]
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        const message =
+          payload && !Array.isArray(payload) ? payload.message : undefined;
+        throw new Error(message ?? `Failed to load clients (${response.status})`);
+      }
+
+      setClients(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      setClients([]);
+      setClientsError(err instanceof Error ? err.message : "Failed to load clients");
+    } finally {
+      setLoadingClients(false);
+    }
+  }, [isAdmin]);
+
+  const loadPickupLocations = useCallback(async (clientId: number) => {
     if (!Number.isInteger(clientId) || clientId < 1) {
-      setLocationsError("Client session not found. Please log in again.");
       setPickupLocations([]);
       return;
     }
@@ -124,22 +172,47 @@ export function AddClientOrderDialog({
     } finally {
       setLoadingLocations(false);
     }
-  }, [clientId]);
+  }, []);
+
+  const loadServices = useCallback(async () => {
+    setLoadingServices(true);
+    setServicesError(null);
+
+    try {
+      const response = await fetch("/api/services");
+      const payload = (await response.json().catch(() => null)) as
+        | Service[]
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        const message =
+          payload && !Array.isArray(payload) ? payload.message : undefined;
+        throw new Error(message ?? `Failed to load services (${response.status})`);
+      }
+
+      const allServices = Array.isArray(payload) ? payload : [];
+      setServices(allServices);
+
+      if (allServices.length === 1) {
+        setSelectedServiceId(String(allServices[0].serviceId));
+      }
+    } catch (err) {
+      setServices([]);
+      setServicesError(err instanceof Error ? err.message : "Failed to load services");
+    } finally {
+      setLoadingServices(false);
+    }
+  }, []);
 
   const loadCities = useCallback(async () => {
-    if (!Number.isInteger(clientId) || clientId < 1) {
-      setCitiesError("Client session not found. Please log in again.");
-      setCities([]);
-      return;
-    }
-
     setLoadingCities(true);
     setCitiesError(null);
 
     try {
-      const response = await fetch(`/api/clients/${clientId}/cities`);
+      const response = await fetch("/api/cities");
       const payload = (await response.json().catch(() => null)) as
-        | ClientCity[]
+        | City[]
         | { message?: string }
         | null;
 
@@ -155,7 +228,7 @@ export function AddClientOrderDialog({
     } finally {
       setLoadingCities(false);
     }
-  }, [clientId]);
+  }, []);
 
   const loadPickupDetails = useCallback(async (pickupLocationId: number) => {
     setLoadingDetails(true);
@@ -197,11 +270,46 @@ export function AddClientOrderDialog({
       return;
     }
 
-    if (ready) {
-      loadPickupLocations();
-      loadCities();
+    if (!ready) return;
+
+    loadCities();
+    loadServices();
+    if (isAdmin) {
+      loadClients();
     }
-  }, [isOpen, ready, loadPickupLocations, loadCities, resetForm]);
+  }, [isOpen, ready, isAdmin, loadCities, loadServices, loadClients, resetForm]);
+
+  useEffect(() => {
+    if (!isOpen || !ready) return;
+
+    if (isAdmin) {
+      if (!effectiveClientId) {
+        setPickupLocations([]);
+        setSelectedPickupLocationId("");
+        setPickupDetails(null);
+        return;
+      }
+
+      setSelectedPickupLocationId("");
+      setPickupDetails(null);
+      loadPickupLocations(effectiveClientId);
+      return;
+    }
+
+    if (!Number.isInteger(sessionClientId) || sessionClientId < 1) {
+      setLocationsError("Client session not found. Please log in again.");
+      return;
+    }
+
+    loadPickupLocations(sessionClientId);
+  }, [
+    isOpen,
+    ready,
+    isAdmin,
+    effectiveClientId,
+    sessionClientId,
+    loadPickupLocations,
+  ]);
 
   useEffect(() => {
     if (!isOpen || !selectedPickupLocationId) {
@@ -225,11 +333,16 @@ export function AddClientOrderDialog({
   const buildPayload = (): CreateOrderPayload | null => {
     if (!pickupDetails) return null;
 
+    const serviceId = Number(selectedServiceId);
+    const selectedService = services.find((service) => service.serviceId === serviceId);
+
+    if (!serviceId || !selectedService) return null;
+
     return {
-      clientId,
+      clientId: effectiveClientId,
       pickupLocationId: pickupDetails.pickupLocationId,
-      serviceId: pickupDetails.serviceId,
-      serviceName: pickupDetails.serviceName,
+      serviceId,
+      serviceName: selectedService.serviceName,
       originAddress: pickupDetails.originAddress,
       originArea: pickupDetails.originArea,
       originCityId: pickupDetails.originCityId,
@@ -257,8 +370,18 @@ export function AddClientOrderDialog({
       return;
     }
 
+    if (isAdmin && effectiveClientId < 1) {
+      setSubmitError("Please select a client.");
+      return;
+    }
+
     if (!pickupDetails) {
       setSubmitError("Please select a pickup location.");
+      return;
+    }
+
+    if (!selectedServiceId) {
+      setSubmitError("Please select a service.");
       return;
     }
 
@@ -280,10 +403,9 @@ export function AddClientOrderDialog({
     try {
       const response = await fetch("/api/orders", {
         method: "POST",
-        headers: {
+        headers: buildAppAuthHeaders(token, role, sessionClientId, {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        }),
         body: JSON.stringify(payload),
       });
 
@@ -314,7 +436,26 @@ export function AddClientOrderDialog({
 
   if (!isOpen) return null;
 
-  const loadError = submitError ?? detailsError ?? citiesError ?? locationsError;
+  const loadError =
+    submitError ??
+    detailsError ??
+    citiesError ??
+    servicesError ??
+    clientsError ??
+    locationsError;
+
+  const clientLabel = (client: Client) =>
+    client.clientName?.trim() ||
+    client.brandName?.trim() ||
+    client.clientCode ||
+    `Client #${client.clientId}`;
+
+  const canSubmit =
+    !submitting &&
+    !loadingDetails &&
+    pickupDetails &&
+    selectedServiceId &&
+    (!isAdmin || effectiveClientId > 0);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">
@@ -340,6 +481,90 @@ export function AddClientOrderDialog({
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {isAdmin && (
+              <FormField label="Client" required>
+                <div className="relative">
+                  <select
+                    value={selectedClientId}
+                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    disabled={loadingClients || submitting}
+                    className={cn(inputClass, "appearance-none cursor-pointer")}
+                    required
+                  >
+                    <option value="">
+                      {loadingClients ? "Loading clients..." : "--Select Client--"}
+                    </option>
+                    {clients.map((client) => (
+                      <option key={client.clientId} value={client.clientId}>
+                        {clientLabel(client)}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    size={14}
+                  />
+                </div>
+              </FormField>
+            )}
+            <FormField label="Pickup Location" required>
+              <div className="relative">
+                <select
+                  value={selectedPickupLocationId}
+                  onChange={(e) => setSelectedPickupLocationId(e.target.value)}
+                  disabled={
+                    loadingLocations ||
+                    submitting ||
+                    !ready ||
+                    (isAdmin && !effectiveClientId)
+                  }
+                  className={cn(inputClass, "appearance-none cursor-pointer")}
+                  required
+                >
+                  <option value="">
+                    {loadingLocations
+                      ? "Loading pickup locations..."
+                      : isAdmin && !effectiveClientId
+                        ? "Select client first"
+                        : "Select Pickup Location"}
+                  </option>
+                  {pickupLocations.map((location) => (
+                    <option key={location.pickupLocationId} value={location.pickupLocationId}>
+                      {location.locationName}
+                      {location.isDefault ? " (Default)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  size={14}
+                />
+              </div>
+            </FormField>
+            <FormField label="Service" required>
+              <div className="relative">
+                <select
+                  value={selectedServiceId}
+                  onChange={(e) => setSelectedServiceId(e.target.value)}
+                  disabled={loadingServices || submitting}
+                  className={cn(inputClass, "appearance-none cursor-pointer")}
+                  required
+                >
+                  <option value="">
+                    {loadingServices ? "Loading services..." : "--Select Service--"}
+                  </option>
+                  {services.map((service) => (
+                    <option key={service.serviceId} value={service.serviceId}>
+                      {service.serviceName}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  size={14}
+                />
+              </div>
+            </FormField>
             <FormField label="Customer Name" required>
               <input
                 type="text"
@@ -427,15 +652,6 @@ export function AddClientOrderDialog({
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Delivery Type">
-              <input
-                type="text"
-                value={pickupDetails?.serviceName ?? ""}
-                placeholder={loadingDetails ? "Loading service..." : "Select pickup location first"}
-                readOnly
-                className={inputClass}
-              />
-            </FormField>
             <FormField label="Amount">
               <input
                 type="number"
@@ -471,31 +687,6 @@ export function AddClientOrderDialog({
                 className={inputClass}
                 disabled={submitting}
               />
-            </FormField>
-            <FormField label="Pickup Location" required>
-              <div className="relative">
-                <select
-                  value={selectedPickupLocationId}
-                  onChange={(e) => setSelectedPickupLocationId(e.target.value)}
-                  disabled={loadingLocations || submitting || !ready}
-                  className={cn(inputClass, "appearance-none cursor-pointer")}
-                  required
-                >
-                  <option value="">
-                    {loadingLocations ? "Loading pickup locations..." : "Select Pickup Location"}
-                  </option>
-                  {pickupLocations.map((location) => (
-                    <option key={location.pickupLocationId} value={location.pickupLocationId}>
-                      {location.locationName}
-                      {location.isDefault ? " (Default)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  size={14}
-                />
-              </div>
             </FormField>
             <FormField label="Origin Address">
               <input
@@ -559,7 +750,7 @@ export function AddClientOrderDialog({
               </button>
               <button
                 type="submit"
-                disabled={submitting || loadingDetails || !pickupDetails}
+                disabled={!canSubmit}
                 className="h-10 px-8 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50"
               >
                 {submitting ? "Submitting..." : "Submit"}

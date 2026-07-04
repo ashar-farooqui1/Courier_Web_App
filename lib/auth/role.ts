@@ -134,6 +134,24 @@ export function isAdminRole(role: LoginRole | null): boolean {
   return role === "admin" || role === "super-admin";
 }
 
+/** Logged-in admin id from auth session (localStorage / sessionStorage). */
+export function getStoredAdminId(): number {
+  const session = getAuthSession();
+  if (!session || !isAdminRole(session.role)) return 0;
+
+  const adminId = session.user.userId;
+  return Number.isInteger(adminId) && adminId > 0 ? adminId : 0;
+}
+
+/** Logged-in client id from auth session (localStorage / sessionStorage). */
+export function getStoredClientId(): number {
+  const session = getAuthSession();
+  if (!session || !isClientRole(session.role)) return 0;
+
+  const clientId = session.user.userId;
+  return Number.isInteger(clientId) && clientId > 0 ? clientId : 0;
+}
+
 export function loginRoleFromUser(user: AuthUser): LoginRole {
   return mapRoleNameToLoginRole(user.roleName) ?? "client";
 }

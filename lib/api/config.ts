@@ -5,6 +5,8 @@ export const API_BASE_URL =
 export const API_ROUTES = {
   clients: "/api/Client",
   createClient: "/api/Client/CreateClient",
+  onboardClient: "/api/Client/OnboardClient",
+  uploadClientLogo: (clientId: number | string) => `/api/Client/${clientId}/UploadLogo`,
   clientById: (clientId: number | string) => `/api/Client/${clientId}`,
   clientAssignedServices: (clientId: number | string) =>
     `/api/Client/GetClientAssignedServices?clientId=${clientId}`,
@@ -19,12 +21,20 @@ export const API_ROUTES = {
     `/api/Client/UpdatePickupLocations?pickupLocationId=${pickupLocationId}`,
   deletePickupLocation: (pickupLocationId: number | string) =>
     `/api/Client/DeletePickupLocations?PickupId=${pickupLocationId}`,
+  clientPricing: (clientId: number | string) =>
+    `/api/Client/GetClientPricing?clientId=${clientId}`,
+  clientDeliverySettings: (clientId: number | string) =>
+    `/api/Client/GetDeliverySettings?clientId=${clientId}`,
+  saveDeliveryCharges: '/api/Client/SaveDeliveryCharges',
+  saveDeliverySettings: '/api/Client/SaveDeliverySettings',
 
   orderPickupLocation: (pickupLocationId: number | string) =>
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
   createOrder: "/api/Order/CreateOrder",
+  orders: "/api/Order/GetOrders",
   ordersByClient: (clientId: number | string) =>
-    `/api/Order/GetOrdersByClient?clientId=${clientId}`,
+    `/api/Order/GetOrders?clientId=${clientId}`,
+  updateOrderStatus: "/api/Order/UpdateOrderStatus",
   bulkUploadOrders: "/api/Order/BulkUpload",
   generateAwb: "/api/Order/generate-awb",
 
@@ -38,6 +48,7 @@ export const API_ROUTES = {
   deleteCity: (cityId: number | string) => `/api/Admin/DeleteCity?id=${cityId}`,
   searchCities: (keyword: string) =>
     `/api/Admin/SearchCities?keyword=${encodeURIComponent(keyword)}`,
+  zones: "/api/Admin/GetAllZones",
   services: "/api/Admin/GellAllService",
 
   roles: "/api/Auth/GetRoles",

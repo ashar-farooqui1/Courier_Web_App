@@ -11,13 +11,13 @@ import {
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { CityFormFields } from "@/components/cities/CityFormFields";
 import type { CreateCityPayload } from "@/lib/types/city";
-import type { Service } from "@/lib/types/service";
+import type { Zone } from "@/lib/types/zone";
 
 const FORM_ID = "create-city-form";
 
 const emptyForm: CreateCityPayload = {
   cityName: "",
-  serviceId: 0,
+  zoneId: 0,
   shortForm: "",
   status: "Active",
 };
@@ -30,8 +30,8 @@ interface CreateCityDialogProps {
 
 export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialogProps) {
   const [values, setValues] = useState<CreateCityPayload>(emptyForm);
-  const [services, setServices] = useState<Service[]>([]);
-  const [loadingServices, setLoadingServices] = useState(false);
+  const [zones, setZones] = useState<Zone[]>([]);
+  const [loadingZones, setLoadingZones] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,22 +41,22 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
     setValues(emptyForm);
     setError(null);
     setSubmitting(false);
-    setLoadingServices(true);
+    setLoadingZones(true);
 
-    fetch("/api/services")
+    fetch("/api/zones")
       .then(async (response) => {
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
-          throw new Error(body.error ?? `Failed to load services (${response.status})`);
+          throw new Error(body.error ?? `Failed to load zones (${response.status})`);
         }
-        const data: Service[] = await response.json();
-        setServices(Array.isArray(data) ? data : []);
+        const data: Zone[] = await response.json();
+        setZones(Array.isArray(data) ? data : []);
       })
       .catch((err) => {
-        setServices([]);
-        setError(err instanceof Error ? err.message : "Failed to load services");
+        setZones([]);
+        setError(err instanceof Error ? err.message : "Failed to load zones");
       })
-      .finally(() => setLoadingServices(false));
+      .finally(() => setLoadingZones(false));
   }, [isOpen]);
 
   const setField = <K extends keyof CreateCityPayload>(field: K, value: CreateCityPayload[K]) => {
@@ -70,7 +70,7 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
 
     const payload: CreateCityPayload = {
       cityName: values.cityName.trim(),
-      serviceId: Number(values.serviceId),
+      zoneId: Number(values.zoneId),
       shortForm: values.shortForm.trim().toUpperCase(),
       status: values.status.trim(),
     };
@@ -81,8 +81,8 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
       return;
     }
 
-    if (!payload.serviceId) {
-      setError("Please select a service.");
+    if (!payload.zoneId) {
+      setError("Please select a zone.");
       setSubmitting(false);
       return;
     }
@@ -122,18 +122,18 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
           onCancel={onClose}
           submitLabel="Add City"
           submittingLabel="Saving..."
-          submitting={submitting || loadingServices}
+          submitting={submitting || loadingZones}
         />
       }
     >
       <DialogBody>
         {error ? <DialogError message={error} /> : null}
 
-        {loadingServices ? (
-          <DialogLoading message="Loading services…" />
+        {loadingZones ? (
+          <DialogLoading message="Loading zones…" />
         ) : (
           <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-4">
-            <CityFormFields values={values} services={services} onChange={setField} />
+            <CityFormFields values={values} zones={zones} onChange={setField} />
           </form>
         )}
       </DialogBody>

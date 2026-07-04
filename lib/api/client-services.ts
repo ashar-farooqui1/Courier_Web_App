@@ -8,10 +8,30 @@ import type {
   RemoveClientServiceResponse,
 } from '@/lib/types/client-service';
 
+interface ClientServicesApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: ClientAssignedService[];
+  details?: unknown;
+}
+
+function unwrapClientServices(
+  response: ClientServicesApiResponse | ClientAssignedService[]
+): ClientAssignedService[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return Array.isArray(response.data) ? response.data : [];
+}
+
 export async function getClientAssignedServices(
   clientId: number
 ): Promise<ClientAssignedService[]> {
-  return apiGet<ClientAssignedService[]>(API_ROUTES.clientAssignedServices(clientId));
+  const response = await apiGet<ClientServicesApiResponse | ClientAssignedService[]>(
+    API_ROUTES.clientAssignedServices(clientId)
+  );
+  return unwrapClientServices(response);
 }
 
 export async function assignClientServices(

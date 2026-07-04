@@ -37,6 +37,19 @@ export interface CreateOrderApiResponse {
   data?: unknown;
 }
 
+export type OrderStatus = "Draft" | "Finalize";
+
+export interface UpdateOrderStatusPayload {
+  orderIds: number[];
+  status: OrderStatus;
+}
+
+export interface UpdateOrderStatusApiResponse {
+  success?: boolean;
+  message?: string;
+  data?: unknown;
+}
+
 export interface ClientOrder {
   orderId: number;
   awbNo: string;

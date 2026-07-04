@@ -12,7 +12,7 @@ import type { City } from "@/lib/types/city";
 const TABLE_HEADERS = [
   "City ID",
   "City Name",
-  "Service",
+  "Zone",
   "Short Form",
   "Status",
   "Action",
@@ -109,7 +109,7 @@ export default function CitiesPage() {
       [
         city.cityId,
         city.cityName,
-        city.serviceName,
+        city.zoneName,
         city.shortForm,
         city.status,
       ]
@@ -310,7 +310,7 @@ export default function CitiesPage() {
                     <td className="p-4 text-xs font-bold text-slate-700 uppercase">{city.cityName}</td>
                     <td className="p-4">
                       <span className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase">
-                        {city.serviceName}
+                        {city.zoneName}
                       </span>
                     </td>
                     <td className="p-4 text-xs font-bold text-slate-600">{city.shortForm}</td>

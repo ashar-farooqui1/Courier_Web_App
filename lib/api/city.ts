@@ -2,7 +2,22 @@ import { API_BASE_URL, API_ROUTES } from "@/lib/api/config";
 import { ApiError } from "@/lib/api/http";
 import { apiGet } from "@/lib/api/http";
 import { parseApiErrorMessage } from "@/lib/api/errors";
-import type { City, CreateCityPayload } from "@/lib/types/city";
+import type { City, CreateCityPayload, UpdateCityPayload } from "@/lib/types/city";
+
+interface CitiesApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: City[];
+  details?: unknown;
+}
+
+function unwrapCities(response: CitiesApiResponse | City[]): City[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return Array.isArray(response.data) ? response.data : [];
+}
 
 async function parseCityMutationResponse(
   response: Response,
@@ -54,7 +69,7 @@ async function postCityJson(path: string, payload: CreateCityPayload): Promise<s
 
 async function putCityJson(
   cityId: number,
-  payload: CreateCityPayload
+  payload: UpdateCityPayload
 ): Promise<string> {
   const response = await fetch(`${API_BASE_URL}${API_ROUTES.updateCity(cityId)}`, {
     method: "PUT",
@@ -82,20 +97,22 @@ async function deleteCityRequest(cityId: number): Promise<string> {
 }
 
 export async function getAllCities(): Promise<City[]> {
-  return apiGet<City[]>(API_ROUTES.cities);
+  const response = await apiGet<CitiesApiResponse | City[]>(API_ROUTES.cities);
+  return unwrapCities(response);
 }
 
 export async function searchCities(keyword: string): Promise<City[]> {
   const query = keyword.trim();
   if (!query) return getAllCities();
-  return apiGet<City[]>(API_ROUTES.searchCities(query));
+  const response = await apiGet<CitiesApiResponse | City[]>(API_ROUTES.searchCities(query));
+  return unwrapCities(response);
 }
 
 export async function createCity(payload: CreateCityPayload): Promise<string> {
   return postCityJson(API_ROUTES.createCity, payload);
 }
 
-export async function updateCity(cityId: number, payload: CreateCityPayload): Promise<string> {
+export async function updateCity(cityId: number, payload: UpdateCityPayload): Promise<string> {
   return putCityJson(cityId, payload);
 }
 

@@ -1,4 +1,4 @@
-import { mapRoleNameToLoginRole } from "@/lib/auth/map-role";
+import { mapRoleNameToLoginRole, normalizeRoleName } from "@/lib/auth/map-role";
 import type { AuthUser, LoginResponseData } from "@/lib/types/user";
 
 function pickString(data: LoginResponseData, keys: string[]): string {
@@ -44,8 +44,21 @@ export function normalizeAuthUser(data: LoginResponseData, fallbackEmail: string
     throw new Error(`Unsupported role: ${roleName}`);
   }
 
+  const normalizedRole = normalizeRoleName(roleName);
+  let userIdKeys: string[];
+
+  if (normalizedRole === "client") {
+    userIdKeys = ["clientId", "ClientId", "userId", "id"];
+  } else if (normalizedRole === "admin" || normalizedRole === "superadmin") {
+    userIdKeys = ["adminId", "AdminId", "userId", "id"];
+  } else if (normalizedRole === "rider") {
+    userIdKeys = ["riderId", "RiderId", "userId", "id"];
+  } else {
+    userIdKeys = ["userId", "id", "clientId", "adminId", "riderId"];
+  }
+
   return {
-    userId: pickNumber(data, ["userId", "id", "adminId", "clientId", "riderId"]),
+    userId: pickNumber(data, userIdKeys),
     email,
     displayName,
     roleId,

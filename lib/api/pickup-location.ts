@@ -7,6 +7,23 @@ import type {
   UpdatePickupLocationPayload,
 } from '@/lib/types/pickup-location';
 
+interface PickupLocationsApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown[];
+  details?: unknown;
+}
+
+function unwrapPickupLocations(
+  response: PickupLocationsApiResponse | unknown[]
+): unknown[] {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return Array.isArray(response.data) ? response.data : [];
+}
+
 async function parsePickupMutationResponse(
   response: Response,
   fallbackError: string,
@@ -36,9 +53,22 @@ async function parsePickupMutationResponse(
   if (!text) return successMessage;
 
   try {
-    const data = JSON.parse(text) as { message?: string; success?: boolean };
+    const data = JSON.parse(text) as {
+      message?: string | null;
+      success?: boolean;
+    };
+
+    if (data.success === false) {
+      throw new ApiError(
+        parseApiErrorMessage(data, fallbackError),
+        response.status,
+        data
+      );
+    }
+
     return data.message ?? successMessage;
-  } catch {
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     return text || successMessage;
   }
 }
@@ -116,9 +146,8 @@ async function fetchPickupLocations(path: string): Promise<PickupLocation[]> {
   if (!text) return [];
 
   try {
-    const data = JSON.parse(text) as unknown;
-    if (!Array.isArray(data)) return [];
-    return data
+    const data = JSON.parse(text) as PickupLocationsApiResponse | unknown[];
+    return unwrapPickupLocations(data)
       .map(normalizePickupLocation)
       .filter((location): location is PickupLocation => location !== null);
   } catch {

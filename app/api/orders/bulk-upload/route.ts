@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { bulkUploadOrders } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
 import { normalizeBulkUploadFileBuffer } from '@/lib/orders/normalize-bulk-upload-file';
+import { readAppRequestContext, resolveWriteClientId } from '@/lib/api/app-request-context';
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) return undefined;
@@ -19,12 +20,17 @@ export async function POST(request: Request) {
 
   try {
     const formData = await request.formData();
-    const clientId = Number(formData.get('ClientId') ?? formData.get('clientId'));
+    const requestedClientId = Number(formData.get('ClientId') ?? formData.get('clientId'));
     const file = formData.get('file');
 
-    if (!Number.isInteger(clientId) || clientId < 1) {
-      return NextResponse.json({ message: 'Invalid client ID' }, { status: 400 });
+    const ctx = readAppRequestContext(request);
+    const scoped = resolveWriteClientId(ctx, requestedClientId);
+
+    if (scoped.error) {
+      return NextResponse.json({ message: scoped.error }, { status: scoped.status ?? 403 });
     }
+
+    const clientId = scoped.clientId;
 
     if (!(file instanceof Blob) || file.size === 0) {
       return NextResponse.json({ message: 'Please select a file to upload' }, { status: 400 });

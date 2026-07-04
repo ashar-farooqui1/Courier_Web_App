@@ -33,10 +33,7 @@ export function AddClientDialog({ isOpen, onClose, onSuccess }: AddClientDialogP
 
   useEffect(() => {
     if (!isOpen) return;
-    setValues({
-      ...defaultCreateClientFormValues,
-      arrivalAt: new Date().toISOString().slice(0, 16),
-    });
+    setValues(defaultCreateClientFormValues);
     setLogoFile(null);
     setSubmitError(null);
     setSubmitting(false);

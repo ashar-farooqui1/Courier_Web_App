@@ -7,6 +7,7 @@ import {
   DialogBody,
   DialogError,
   DialogFormFooter,
+  DialogLoading,
 } from "@/components/ui/AppDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { buildRiderFormData } from "@/lib/riders/rider-form";
@@ -14,6 +15,7 @@ import {
   defaultCreateRiderFormValues,
   type CreateRiderFormValues,
 } from "@/lib/types/create-rider";
+import type { City } from "@/lib/types/city";
 
 const FORM_ID = "create-rider-form";
 
@@ -29,6 +31,8 @@ export function CreateRiderDialog({
   onSuccess,
 }: CreateRiderDialogProps) {
   const [values, setValues] = useState<CreateRiderFormValues>(defaultCreateRiderFormValues);
+  const [cities, setCities] = useState<City[]>([]);
+  const [loadingCities, setLoadingCities] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -36,11 +40,28 @@ export function CreateRiderDialog({
 
   useEffect(() => {
     if (!isOpen) return;
+
     setValues(defaultCreateRiderFormValues);
     setImageFile(null);
     setLicenseFile(null);
     setError(null);
     setSubmitting(false);
+    setLoadingCities(true);
+
+    fetch("/api/cities")
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.error ?? `Failed to load cities (${response.status})`);
+        }
+        const data: City[] = await response.json();
+        setCities(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => {
+        setCities([]);
+        setError(err instanceof Error ? err.message : "Failed to load cities");
+      })
+      .finally(() => setLoadingCities(false));
   }, [isOpen]);
 
   const setField = (field: keyof CreateRiderFormValues, value: string) => {
@@ -90,7 +111,7 @@ export function CreateRiderDialog({
           onCancel={onClose}
           submitLabel="Add"
           submittingLabel="Adding…"
-          submitting={submitting}
+          submitting={submitting || loadingCities}
           formId={FORM_ID}
         />
       }
@@ -98,14 +119,19 @@ export function CreateRiderDialog({
       <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
         <DialogBody>
           {error && <DialogError message={error} />}
-          <RiderFormFields
-            values={values}
-            onChange={setField}
-            imageFile={imageFile}
-            onImageChange={setImageFile}
-            licenseFile={licenseFile}
-            onLicenseChange={setLicenseFile}
-          />
+          {loadingCities ? (
+            <DialogLoading message="Loading cities…" />
+          ) : (
+            <RiderFormFields
+              values={values}
+              onChange={setField}
+              imageFile={imageFile}
+              onImageChange={setImageFile}
+              licenseFile={licenseFile}
+              onLicenseChange={setLicenseFile}
+              cities={cities}
+            />
+          )}
         </DialogBody>
       </form>
     </AppDialog>

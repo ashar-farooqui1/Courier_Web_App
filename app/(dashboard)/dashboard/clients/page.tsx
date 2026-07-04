@@ -4,9 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Trash2, Plus, Edit2, X, Layers, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatArrivalAt, formatStatusLabel } from '@/lib/format';
+import { formatStatusLabel } from '@/lib/format';
 import type { Client } from '@/lib/types/client';
-import { AddClientDialog } from '@/components/clients/AddClientDialog';
 import { EditClientDialog } from '@/components/clients/EditClientDialog';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
@@ -19,14 +18,13 @@ import {
 const tableHeaders = [
   'Action', 'Status', 'Client ID', 'Brand Name', 'Client Name', 'POC #', 'Contact #',
   'Client Logo', 'Client Email', 'Client Billing Address', 'Client Pickup Address',
-  'Base Town', 'City', 'Default Picking Rider', 'Services', 'Arrival At',
+  'Base Town', 'City',
 ] as const;
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editClientId, setEditClientId] = useState<number | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchDraft, setSearchDraft] = useState<ClientSearchFilters>(emptyClientSearchFilters);
@@ -146,11 +144,6 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      <AddClientDialog
-        isOpen={addDialogOpen}
-        onClose={() => setAddDialogOpen(false)}
-        onSuccess={handleClientSaved}
-      />
       <EditClientDialog
         clientId={editClientId}
         isOpen={editClientId !== null}
@@ -187,14 +180,13 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Client List</h1>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setAddDialogOpen(true)}
+          <Link
+            href="/dashboard/clients/onboard"
             className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md flex items-center gap-2 active:scale-95 transition-all"
           >
             <Plus size={14} />
             Add New
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -349,8 +341,8 @@ export default function ClientsPage() {
                         <Link
                           href={`/dashboard/clients/${client.clientId}/services`}
                           className="p-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 transition-colors flex items-center justify-center"
-                          aria-label="Assign services"
-                          title="Assign services"
+                          aria-label="Delivery charges"
+                          title="Delivery charges"
                         >
                           <Layers size={12} />
                         </Link>
@@ -407,9 +399,6 @@ export default function ClientsPage() {
                     <td className="p-4 align-top text-[10px] max-w-[150px] whitespace-normal">{client.clientPickupAddress}</td>
                     <td className="p-4 align-top text-[10px]">{client.baseTown}</td>
                     <td className="p-4 align-top text-[10px]">{client.city}</td>
-                    <td className="p-4 align-top text-[10px]">{client.defaultPickingRiderId || '—'}</td>
-                    <td className="p-4 align-top text-[10px] max-w-[150px] whitespace-normal">{client.services}</td>
-                    <td className="p-4 align-top text-[10px] whitespace-nowrap">{formatArrivalAt(client.arrivalAt)}</td>
                   </tr>
                 ))
               )}

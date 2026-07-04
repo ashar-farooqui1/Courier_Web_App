@@ -1,7 +1,15 @@
-import type { Client } from '@/lib/types/client';
+import { getStoredAdminId } from '@/lib/auth/role';
+import type { Client, UpdateClientPayload } from '@/lib/types/client';
 import type { CreateClientFormValues } from '@/lib/types/create-client';
 
 export const CREATE_CLIENT_ROLE_ID = 3;
+
+function formatClientStatus(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === 'active') return 'Active';
+  if (normalized === 'inactive') return 'Inactive';
+  return status.trim();
+}
 
 export function arrivalAtToDatetimeLocal(arrivalAt: string): string {
   if (!arrivalAt || arrivalAt.startsWith('0001-')) return '';
@@ -36,6 +44,8 @@ export interface BuildClientFormDataOptions {
   roleId?: number;
   /** When null, sends Services as empty (backend null). */
   services?: string | null;
+  /** Override logged-in admin id for CreatedByAdminId. */
+  createdByAdminId?: number;
 }
 
 export function buildClientFormData(
@@ -73,6 +83,12 @@ export function buildClientFormData(
   if (roleId) {
     formData.append('RoleId', roleId);
   }
+
+  const createdByAdminId = options?.createdByAdminId ?? getStoredAdminId();
+  if (createdByAdminId > 0) {
+    formData.append('CreatedByAdminId', String(createdByAdminId));
+  }
+
   if (values.arrivalAt.trim()) {
     formData.append('ArrivalAt', new Date(values.arrivalAt).toISOString());
   }
@@ -81,4 +97,24 @@ export function buildClientFormData(
   }
 
   return formData;
+}
+
+export function buildClientUpdatePayload(values: CreateClientFormValues): UpdateClientPayload {
+  return {
+    status: formatClientStatus(values.status),
+    brandName: values.brandName.trim(),
+    clientName: values.clientName.trim(),
+    pocNumber: values.pocNumber.trim(),
+    contactNumber: values.contactNumber.trim(),
+    clientEmail: values.clientEmail.trim(),
+    clientBillingAddress: values.clientBillingAddress.trim(),
+    clientPickupAddress: values.clientPickupAddress.trim(),
+    baseTown: values.baseTown.trim(),
+    city: values.city.trim(),
+    defaultPickingRiderId: Number(values.defaultPickingRiderId) || 0,
+    salesPersonId: 0,
+    services: values.services.trim(),
+    roleId: CREATE_CLIENT_ROLE_ID,
+    createdByAdminId: 0,
+  };
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { deleteCity, updateCity } from "@/lib/api/city";import { parseApiErrorMessage } from "@/lib/api/errors";
-import type { CreateCityPayload } from "@/lib/types/city";
+import { deleteCity, updateCity } from "@/lib/api/city";
+import { parseApiErrorMessage } from "@/lib/api/errors";
+import type { UpdateCityPayload } from "@/lib/types/city";
 
 type RouteContext = { params: Promise<{ cityId: string }> };
 
@@ -9,17 +10,17 @@ function parseCityId(cityId: string): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function parsePayload(body: CreateCityPayload): CreateCityPayload | null {
+function parsePayload(body: UpdateCityPayload): UpdateCityPayload | null {
   const cityName = String(body.cityName ?? "").trim();
   const shortForm = String(body.shortForm ?? "").trim();
   const status = String(body.status ?? "").trim();
-  const serviceId = Number(body.serviceId);
+  const zoneId = Number(body.zoneId);
 
-  if (!cityName || !shortForm || !status || !Number.isFinite(serviceId) || serviceId <= 0) {
+  if (!cityName || !shortForm || !status || !Number.isFinite(zoneId) || zoneId <= 0) {
     return null;
   }
 
-  return { cityName, serviceId, shortForm, status };
+  return { cityName, zoneId, shortForm, status };
 }
 
 export async function PUT(request: Request, context: RouteContext) {
@@ -31,7 +32,7 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const body = (await request.json()) as CreateCityPayload;
+    const body = (await request.json()) as UpdateCityPayload;
     const payload = parsePayload(body);
 
     if (!payload) {

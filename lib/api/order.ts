@@ -10,6 +10,7 @@ import type {
   CreateOrderApiResponse,
   CreateOrderPayload,
   OrderPickupLocationDetails,
+  UpdateOrderStatusPayload,
 } from '@/lib/types/order';
 
 function pickString(record: Record<string, unknown>, keys: string[]): string {
@@ -84,10 +85,19 @@ export async function getOrderPickupLocation(
   }
 
   try {
-    const data = JSON.parse(text) as unknown;
-    const details = normalizeOrderPickupLocationDetails(data);
+    const parsed = JSON.parse(text) as unknown;
+    const raw =
+      parsed &&
+      typeof parsed === 'object' &&
+      !Array.isArray(parsed) &&
+      'data' in parsed &&
+      (parsed as { data?: unknown }).data &&
+      typeof (parsed as { data?: unknown }).data === 'object'
+        ? (parsed as { data: unknown }).data
+        : parsed;
+    const details = normalizeOrderPickupLocationDetails(raw);
     if (!details) {
-      throw new ApiError('Invalid pickup location details response', response.status, data);
+      throw new ApiError('Invalid pickup location details response', response.status, parsed);
     }
     return details;
   } catch (error) {
@@ -187,11 +197,14 @@ export function normalizeClientOrder(raw: unknown): ClientOrder | null {
   };
 }
 
-/** GET /api/Order/GetOrdersByClient?clientId={clientId} */
-export async function getOrdersByClient(
-  clientId: number,
-  token?: string
-): Promise<ClientOrder[]> {
+function buildOrdersUrl(clientId?: number): string {
+  if (clientId !== undefined && Number.isInteger(clientId) && clientId > 0) {
+    return API_ROUTES.ordersByClient(clientId);
+  }
+  return API_ROUTES.orders;
+}
+
+async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientOrder[]> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
@@ -200,7 +213,7 @@ export async function getOrdersByClient(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${API_ROUTES.ordersByClient(clientId)}`, {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'GET',
     headers,
     cache: 'no-store',
@@ -225,14 +238,57 @@ export async function getOrdersByClient(
   if (!text) return [];
 
   try {
-    const data = JSON.parse(text) as unknown;
-    if (!Array.isArray(data)) return [];
-    return data
+    const parsed = JSON.parse(text) as unknown;
+    const rows = Array.isArray(parsed)
+      ? parsed
+      : parsed &&
+          typeof parsed === 'object' &&
+          Array.isArray((parsed as { data?: unknown[] }).data)
+        ? (parsed as { data: unknown[] }).data
+        : [];
+    return rows
       .map(normalizeClientOrder)
       .filter((order): order is ClientOrder => order !== null);
   } catch {
     return [];
   }
+}
+
+/** GET /api/Order/GetOrders (optional ?clientId=) */
+export async function getOrders(token?: string, clientId?: number): Promise<ClientOrder[]> {
+  return fetchOrdersFromApi(buildOrdersUrl(clientId), token);
+}
+
+/** GET /api/Order/GetOrders?clientId={clientId} */
+export async function getOrdersByClient(
+  clientId: number,
+  token?: string
+): Promise<ClientOrder[]> {
+  return getOrders(token, clientId);
+}
+
+/** PUT /api/Order/UpdateOrderStatus */
+export async function updateOrderStatus(
+  payload: UpdateOrderStatusPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.updateOrderStatus}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  return parseCreateOrderResponse(response, 'Failed to update order status');
 }
 
 function pickValue(record: Record<string, unknown>, keys: string[]): string | number {

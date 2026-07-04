@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
-  Search,
   Import,
   Trash2,
   UserPlus,
@@ -18,8 +17,15 @@ import {
   AlertCircle,
   RotateCcw,
   ChevronDown,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
+import { ORDER_COLUMNS } from "@/components/orders/order-columns";
+import { useAuthSession } from "@/hooks/useAuthRole";
+import { parseContentDispositionFilename } from "@/lib/format";
+import type { Client } from "@/lib/types/client";
+import type { ClientOrder } from "@/lib/types/order";
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-4xl" }: any) => {
   if (!isOpen) return null;
@@ -40,12 +46,27 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-4xl" }: any
   );
 };
 
-const ActionButton = ({ icon: Icon, label, colorClass = "bg-primary", onClick }: any) => (
+const ActionButton = ({
+  icon: Icon,
+  label,
+  colorClass = "bg-primary",
+  onClick,
+  disabled = false,
+}: {
+  icon: React.ComponentType<{ size?: number }>;
+  label: string;
+  colorClass?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}) => (
   <button
+    type="button"
     onClick={onClick}
+    disabled={disabled}
     className={cn(
       "flex items-center gap-2 px-3 py-2 rounded text-white text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 shadow-sm hover:opacity-90",
-      colorClass
+      colorClass,
+      disabled && "opacity-50 cursor-not-allowed hover:opacity-50 active:scale-100"
     )}
   >
     <Icon size={14} />
@@ -103,6 +124,8 @@ const OrderFilter = ({ label, placeholder, type = "text" }: any) => (
 );
 
 export default function AdminOrdersView() {
+  const { token, ready } = useAuthSession();
+
   const [modalStates, setModalStates] = useState({
     import: false,
     delete: false,
@@ -110,28 +133,295 @@ export default function AdminOrdersView() {
     trashed: false,
     pickup: false,
   });
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [clientsError, setClientsError] = useState<string | null>(null);
+  const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [tableSearch, setTableSearch] = useState("");
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [finalizingOrders, setFinalizingOrders] = useState(false);
+  const [generatingAwb, setGeneratingAwb] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleModal = (key: string, val: boolean) => {
     setModalStates((prev) => ({ ...prev, [key]: val }));
   };
 
-  const tableHeaders = [
-    "AWB ID",
-    "Client Name",
-    "Customer Name",
-    "Customer Number",
-    "Amount",
-    "Product Code",
-    "Reference ID",
-    "Service",
-    "Weight",
-    "Order Time & Date",
-    "Status",
-    "Rider",
-    "Destination City",
-    "Origin City",
-    "Warehouse",
-  ];
+  const loadClients = useCallback(async () => {
+    setLoadingClients(true);
+    setClientsError(null);
+
+    try {
+      const response = await fetch("/api/clients");
+      const payload = (await response.json().catch(() => null)) as
+        | Client[]
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        const message =
+          payload && !Array.isArray(payload) ? payload.message : undefined;
+        throw new Error(message ?? `Failed to load clients (${response.status})`);
+      }
+
+      setClients(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      setClients([]);
+      setClientsError(err instanceof Error ? err.message : "Failed to load clients");
+    } finally {
+      setLoadingClients(false);
+    }
+  }, []);
+
+  const loadOrders = useCallback(async () => {
+    if (!ready) return;
+
+    if (!token) {
+      setOrders([]);
+      setOrdersError("Authentication required. Please log in again.");
+      setLoadingOrders(false);
+      return;
+    }
+
+    const clientId = Number(selectedClientId);
+    const ordersUrl =
+      Number.isInteger(clientId) && clientId > 0
+        ? `/api/orders?clientId=${clientId}`
+        : "/api/orders";
+
+    setLoadingOrders(true);
+    setOrdersError(null);
+
+    try {
+      const response = await fetch(ordersUrl, {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | ClientOrder[]
+        | { message?: string }
+        | null;
+
+      if (!response.ok) {
+        const message =
+          payload && !Array.isArray(payload) ? payload.message : undefined;
+        throw new Error(message ?? `Failed to load orders (${response.status})`);
+      }
+
+      setOrders(Array.isArray(payload) ? payload : []);
+    } catch (err) {
+      setOrders([]);
+      setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, [ready, selectedClientId, token]);
+
+  useEffect(() => {
+    if (ready) {
+      loadClients();
+    }
+  }, [ready, loadClients]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  const filteredOrders = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    if (!query) return orders;
+
+    return orders.filter((order) => {
+      const haystack = [
+        order.awbNo,
+        order.clientName,
+        order.customerName,
+        order.customerPhone,
+        order.customerReference,
+        order.productName,
+        order.serviceName,
+        order.status,
+        order.riderName,
+        order.destinationCity,
+        order.originCity,
+        order.warehouse,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [orders, tableSearch]);
+
+  const visibleOrderIds = useMemo(
+    () => filteredOrders.map((order) => order.orderId),
+    [filteredOrders]
+  );
+
+  const allVisibleSelected =
+    visibleOrderIds.length > 0 && visibleOrderIds.every((orderId) => selectedOrderIds.has(orderId));
+  const someVisibleSelected = visibleOrderIds.some((orderId) => selectedOrderIds.has(orderId));
+
+  const toggleOrderSelection = (orderId: number) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllVisible = () => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      visibleOrderIds.forEach((orderId) => next.add(orderId));
+      return next;
+    });
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedOrderIds(new Set());
+  };
+
+  const handleToggleAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedOrderIds((prev) => {
+        const next = new Set(prev);
+        visibleOrderIds.forEach((orderId) => next.delete(orderId));
+        return next;
+      });
+      return;
+    }
+
+    handleSelectAllVisible();
+  };
+
+  const handleFinalizeOrders = async () => {
+    if (!token) {
+      setActionError("Authentication required. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to finalize.");
+      return;
+    }
+
+    setFinalizingOrders(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/update-status", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds, status: "Finalize" }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to finalize orders (${response.status})`);
+      }
+
+      setSelectedOrderIds(new Set());
+      setSuccessMessage(
+        payload?.message ??
+          (orderIds.length === 1
+            ? "Order finalized successfully."
+            : `${orderIds.length} orders finalized successfully.`)
+      );
+      await loadOrders();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to finalize orders");
+    } finally {
+      setFinalizingOrders(false);
+    }
+  };
+
+  const handleAwbPrint = async () => {
+    if (!token) {
+      setActionError("Authentication required. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to print AWB.");
+      return;
+    }
+
+    setGeneratingAwb(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/generate-awb", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? `Failed to generate AWB (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const fallbackName =
+        orderIds.length === 1 ? `AWB-${orderIds[0]}.pdf` : `AWB-${orderIds.length}-orders.pdf`;
+      const filename = parseContentDispositionFilename(
+        response.headers.get("Content-Disposition"),
+        fallbackName
+      );
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      setSuccessMessage(
+        orderIds.length === 1
+          ? "AWB PDF downloaded successfully."
+          : `AWB PDF downloaded for ${orderIds.length} orders.`
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to generate AWB");
+    } finally {
+      setGeneratingAwb(false);
+    }
+  };
+
+  const handleOrderCreated = (message: string) => {
+    setSuccessMessage(message);
+    loadOrders();
+  };
+
+  const clientLabel = (client: Client) =>
+    client.clientName?.trim() ||
+    client.brandName?.trim() ||
+    client.clientCode ||
+    `Client #${client.clientId}`;
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
@@ -145,12 +435,80 @@ export default function AdminOrdersView() {
           <ActionButton icon={FileBox} label="Rollcart" />
           <ActionButton icon={Scale} label="Re-Weight" />
           <ActionButton icon={FileText} label="Loadsheet" />
-          <ActionButton icon={Printer} label="AWB Print" />
+          <ActionButton
+            icon={Printer}
+            label={generatingAwb ? "Generating…" : "AWB Print"}
+            onClick={handleAwbPrint}
+            disabled={generatingAwb || loadingOrders}
+          />
           <ActionButton icon={Plus} label="Add New" onClick={() => toggleModal("addNew", true)} />
           <ActionButton icon={Archive} label="Trashed" onClick={() => toggleModal("trashed", true)} />
           <ActionButton icon={Truck} label="Pickup Request" onClick={() => toggleModal("pickup", true)} />
         </div>
       </div>
+
+      <AddClientOrderDialog
+        variant="admin"
+        isOpen={modalStates.addNew}
+        onClose={() => toggleModal("addNew", false)}
+        onSuccess={handleOrderCreated}
+      />
+
+      {successMessage && (
+        <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-bold uppercase tracking-wide">
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage(null)}
+            className="shrink-0 p-1 hover:bg-emerald-100 rounded-full transition-colors"
+            aria-label="Dismiss message"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {(clientsError || ordersError || actionError) && (
+        <div className="space-y-3">
+          {clientsError && (
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+              <span>{clientsError}</span>
+              <button
+                type="button"
+                onClick={loadClients}
+                className="shrink-0 h-8 px-4 bg-red-600 text-white text-[10px] font-bold rounded uppercase hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {ordersError && (
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+              <span>{ordersError}</span>
+              <button
+                type="button"
+                onClick={loadOrders}
+                className="shrink-0 h-8 px-4 bg-red-600 text-white text-[10px] font-bold rounded uppercase hover:bg-red-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {actionError && (
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+              <span>{actionError}</span>
+              <button
+                type="button"
+                onClick={() => setActionError(null)}
+                className="shrink-0 p-1 hover:bg-red-100 rounded-full transition-colors"
+                aria-label="Dismiss message"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <Modal isOpen={modalStates.import} onClose={() => toggleModal("import", false)} title="Order Import" maxWidth="max-w-6xl">
         <div className="flex items-end gap-6 bg-white p-4 rounded-lg">
@@ -160,50 +518,6 @@ export default function AdminOrdersView() {
           <button className="h-11 px-10 bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all">
             Choose Client
           </button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={modalStates.addNew} onClose={() => toggleModal("addNew", false)} title="Add Order" maxWidth="max-w-6xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ModalInput label="Select Name" placeholder="Select Name" type="select" />
-          <ModalInput label="Customer Name" placeholder="Customer Name" />
-          <ModalInput label="Customer Phone" placeholder="Customer Phone" />
-          <ModalInput label="Customer Reference" placeholder="Customer Reference" />
-          <ModalInput label="Delivery Address" placeholder="Delivery Address" />
-          <ModalInput label="--Select City--" placeholder="--Select City--" type="select" />
-          <ModalInput label="Area" placeholder="Area" />
-          <ModalInput label="Product Name" placeholder="Product Name" />
-          <ModalInput label="Select Delivery Type" placeholder="Select Delivery Type" type="select" />
-          <ModalInput label="Amount" placeholder="Amount" />
-          <ModalInput label="Quantity" placeholder="1" />
-          <ModalInput label="Weight" placeholder="1" />
-          <div className="md:col-span-1">
-            <ModalInput label="Select Pickup Location" placeholder="Select Pickup Location" type="select" />
-          </div>
-          <div className="md:col-span-1">
-            <ModalInput label="Origin Address" placeholder="Origin Address" />
-          </div>
-          <ModalInput label="Origin Area" placeholder="Origin Area" />
-          <ModalInput label="Origin City" placeholder="Origin City" />
-          <div className="md:col-span-2">
-            <ModalInput label="Customer Remarks" placeholder="Customer Remarks" type="textarea" />
-          </div>
-          <div className="md:col-span-2 flex items-center justify-between pt-4 border-t border-slate-100">
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="replacement" className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary cursor-pointer" />
-              <label htmlFor="replacement" className="text-xs font-bold text-slate-500 uppercase cursor-pointer select-none">
-                Replacement ID
-              </label>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => toggleModal("addNew", false)} className="h-10 px-8 border border-primary text-primary text-[11px] font-bold rounded uppercase hover:bg-slate-50 transition-all">
-                Reset
-              </button>
-              <button className="h-10 px-8 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all">
-                Submit
-              </button>
-            </div>
-          </div>
         </div>
       </Modal>
 
@@ -321,7 +635,32 @@ export default function AdminOrdersView() {
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
           <OrderFilter label="AWB ID" placeholder="Enter AWB ID" />
           <OrderFilter label="Reference ID" placeholder="Enter Reference ID" />
-          <OrderFilter label="Client Name" placeholder="Select Name" type="select" />
+          <div className="space-y-1">
+            <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+              Client Name
+            </label>
+            <div className="relative">
+              <select
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+                disabled={loadingClients}
+                className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20"
+              >
+                <option value="">
+                  {loadingClients ? "Loading clients..." : "Select Client"}
+                </option>
+                {clients.map((client) => (
+                  <option key={client.clientId} value={client.clientId}>
+                    {clientLabel(client)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                size={12}
+              />
+            </div>
+          </div>
           <OrderFilter label="Date (To)" placeholder="" type="date" />
           <OrderFilter label="City" placeholder="Select City" type="select" />
           <OrderFilter label="Assign Date (From)" placeholder="" type="date" />
@@ -352,23 +691,46 @@ export default function AdminOrdersView() {
               <span className="text-[11px] font-bold text-slate-500 uppercase">entries</span>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" className="h-8 px-4 text-[10px] font-bold bg-primary text-white">
+              <button
+                type="button"
+                onClick={handleSelectAllVisible}
+                disabled={visibleOrderIds.length === 0}
+                className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Select All
-              </Button>
-              <Button variant="outline" className="h-8 px-4 text-[10px] font-bold bg-primary text-white">
+              </button>
+              <button
+                type="button"
+                onClick={handleDeselectAll}
+                disabled={selectedOrderIds.size === 0}
+                className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Deselect All
-              </Button>
+              </button>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
-              <button className="h-8 px-4 bg-green-500 text-white text-[10px] font-bold rounded uppercase">Finalize</button>
+              <button
+                type="button"
+                onClick={handleFinalizeOrders}
+                disabled={finalizingOrders || loadingOrders || selectedOrderIds.size === 0}
+                className="h-8 px-4 bg-green-500 text-white text-[10px] font-bold rounded uppercase flex items-center gap-1.5 hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check size={12} />
+                {finalizingOrders ? "Finalizing…" : "Finalize"}
+              </button>
               <button className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase">Cancel</button>
             </div>
             <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
               <span className="text-[11px] font-bold text-slate-500 uppercase">Search:</span>
-              <input type="text" className="h-8 border border-slate-200 rounded px-3 text-xs focus:outline-none" />
+              <input
+                type="text"
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                className="h-8 border border-slate-200 rounded px-3 text-xs focus:outline-none"
+              />
             </div>
           </div>
         </div>
@@ -376,22 +738,86 @@ export default function AdminOrdersView() {
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-100">
-                {tableHeaders.map((header) => (
-                  <th key={header} className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">
-                    {header}
+              <tr className="border-b border-slate-100 bg-slate-50/30">
+                <th className="p-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    ref={(input) => {
+                      if (input) {
+                        input.indeterminate = someVisibleSelected && !allVisibleSelected;
+                      }
+                    }}
+                    onChange={handleToggleAllVisible}
+                    disabled={visibleOrderIds.length === 0}
+                    className="rounded border-slate-300 text-primary focus:ring-primary"
+                    aria-label="Select all visible orders"
+                  />
+                </th>
+                {ORDER_COLUMNS.map((column) => (
+                  <th
+                    key={column.label}
+                    className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap"
+                  >
+                    {column.label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td colSpan={15} className="py-20 text-center text-slate-300 italic text-sm font-medium">
-                  Showing 0 to 0 of 0 entries
-                </td>
-              </tr>
+            <tbody className="text-[11px] font-medium text-slate-600">
+              {loadingOrders ? (
+                <tr>
+                  <td
+                    colSpan={ORDER_COLUMNS.length + 1}
+                    className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest"
+                  >
+                    Loading orders…
+                  </td>
+                </tr>
+              ) : filteredOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={ORDER_COLUMNS.length + 1} className="py-20 text-center">
+                    <p className="text-slate-300 italic text-sm font-medium">No orders found</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredOrders.map((order) => (
+                  <tr
+                    key={order.orderId}
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                  >
+                    <td className="p-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrderIds.has(order.orderId)}
+                        onChange={() => toggleOrderSelection(order.orderId)}
+                        className="rounded border-slate-300 text-primary focus:ring-primary"
+                        aria-label={`Select order ${order.awbNo || order.orderId}`}
+                      />
+                    </td>
+                    {ORDER_COLUMNS.map((column) => (
+                      <td
+                        key={column.label}
+                        className={cn("p-4 whitespace-nowrap", column.cellClassName)}
+                      >
+                        {column.render(order)}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+        </div>
+
+        <div className="p-4 bg-slate-50/30 border-t border-slate-50">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+            {loadingOrders
+              ? "Loading entries…"
+              : filteredOrders.length === 0
+                ? "Showing 0 to 0 of 0 entries"
+                : `Showing 1 to ${filteredOrders.length} of ${orders.length} entries`}
+          </p>
         </div>
       </div>
     </div>

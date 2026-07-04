@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAuthSession, type AuthSession, type LoginRole } from "@/lib/auth/role";
+import {
+  getAuthSession,
+  getStoredClientId,
+  isClientRole,
+  type AuthSession,
+  type LoginRole,
+} from "@/lib/auth/role";
 import type { AuthUser } from "@/lib/types/user";
 
 export function useAuthSession() {
@@ -17,5 +23,7 @@ export function useAuthSession() {
   const user: AuthUser | null = session?.user ?? null;
   const username = user?.displayName || user?.email || "";
 
-  return { role, user, username, token: session?.token, ready };
+  const clientId = isClientRole(role) ? getStoredClientId() : 0;
+
+  return { role, user, username, token: session?.token, clientId, ready };
 }

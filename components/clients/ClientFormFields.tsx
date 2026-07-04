@@ -131,48 +131,18 @@ export function ClientFormFields({
           className={inputClass}
         />
       </div>
-      <div className="space-y-1">
-        <label className={labelClass}>Default Picking Rider Id</label>
-        <input
-          type="number"
-          min={0}
-          value={values.defaultPickingRiderId}
-          onChange={(e) => onChange('defaultPickingRiderId', e.target.value)}
-          className={inputClass}
-        />
-      </div>
       {!hideRoleAndServices && (
-        <>
-          <div className="space-y-1">
-            <label className={labelClass}>Role Id</label>
-            <input
-              type="number"
-              min={0}
-              value={values.roleId}
-              onChange={(e) => onChange('roleId', e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1 sm:col-span-2">
-            <label className={labelClass}>Services</label>
-            <input
-              type="text"
-              value={values.services}
-              onChange={(e) => onChange('services', e.target.value)}
-              className={inputClass}
-            />
-          </div>
-        </>
+        <div className="space-y-1">
+          <label className={labelClass}>Role Id</label>
+          <input
+            type="number"
+            min={0}
+            value={values.roleId}
+            onChange={(e) => onChange('roleId', e.target.value)}
+            className={inputClass}
+          />
+        </div>
       )}
-      <div className="space-y-1 sm:col-span-2">
-        <label className={labelClass}>Arrival At</label>
-        <input
-          type="datetime-local"
-          value={values.arrivalAt}
-          onChange={(e) => onChange('arrivalAt', e.target.value)}
-          className={inputClass}
-        />
-      </div>
     </div>
   );
 }

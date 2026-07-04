@@ -8,7 +8,7 @@ import {
   DialogFormFooter,
   DialogLoading,
 } from "@/components/ui/AppDialog";
-import type { ClientCity } from "@/lib/types/client-city";
+import type { City } from "@/lib/types/city";
 import type { CreatePickupLocationPayload, PickupLocation } from "@/lib/types/pickup-location";
 
 const FORM_ID = "edit-pickup-location-form";
@@ -60,7 +60,7 @@ export function EditPickupLocationDialog({
 }: EditPickupLocationDialogProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState(locationToFormValues(location ?? ({} as PickupLocation)));
-  const [cities, setCities] = useState<ClientCity[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
   const [loadingCities, setLoadingCities] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,13 +73,13 @@ export function EditPickupLocationDialog({
     setSubmitting(false);
     setLoadingCities(true);
 
-    fetch(`/api/clients/${clientId}/cities`)
+    fetch("/api/cities")
       .then(async (response) => {
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
           throw new Error(body.message ?? `Failed to load cities (${response.status})`);
         }
-        const data: ClientCity[] = await response.json();
+        const data: City[] = await response.json();
         setCities(Array.isArray(data) ? data : []);
       })
       .catch((err) => {
