@@ -17,6 +17,10 @@ export function parseApiErrorMessage(
       return record.message;
     }
 
+    if (typeof record.Message === "string" && record.Message) {
+      return record.Message;
+    }
+
     if (typeof record.title === "string" && record.title) {
       const validationMessages = extractValidationMessages(record.errors);
       if (validationMessages.length > 0) {

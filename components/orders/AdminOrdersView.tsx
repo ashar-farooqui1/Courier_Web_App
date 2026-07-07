@@ -23,7 +23,11 @@ import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 import { useAuthSession } from "@/hooks/useAuthRole";
+import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { parseApiErrorMessage } from "@/lib/api/errors";
+import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
+import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
 import type { Client } from "@/lib/types/client";
 import type { ClientOrder } from "@/lib/types/order";
 
@@ -124,7 +128,7 @@ const OrderFilter = ({ label, placeholder, type = "text" }: any) => (
 );
 
 export default function AdminOrdersView() {
-  const { token, ready } = useAuthSession();
+  const { token, ready, role, user } = useAuthSession();
 
   const [modalStates, setModalStates] = useState({
     import: false,
@@ -143,6 +147,7 @@ export default function AdminOrdersView() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -198,31 +203,25 @@ export default function AdminOrdersView() {
 
     try {
       const response = await fetch(ordersUrl, {
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | ClientOrder[]
-        | { message?: string }
-        | null;
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const message =
-          payload && !Array.isArray(payload) ? payload.message : undefined;
-        throw new Error(message ?? `Failed to load orders (${response.status})`);
+        throw new Error(
+          parseApiErrorMessage(payload, `Failed to load orders (${response.status})`)
+        );
       }
 
-      setOrders(Array.isArray(payload) ? payload : []);
+      setOrders(unwrapOrdersList(payload));
     } catch (err) {
       setOrders([]);
       setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
     } finally {
       setLoadingOrders(false);
     }
-  }, [ready, selectedClientId, token]);
+  }, [ready, role, selectedClientId, token, user?.userId]);
 
   useEffect(() => {
     if (ready) {
@@ -318,6 +317,11 @@ export default function AdminOrdersView() {
       return;
     }
 
+    if (!selectedStatus) {
+      setActionError("Please select a status.");
+      return;
+    }
+
     setFinalizingOrders(true);
     setActionError(null);
     setSuccessMessage(null);
@@ -329,21 +333,25 @@ export default function AdminOrdersView() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ orderIds, status: "Finalize" }),
+        body: JSON.stringify({ orderIds, status: selectedStatus }),
       });
 
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? `Failed to finalize orders (${response.status})`);
+        throw new Error(payload?.message ?? `Failed to update order status (${response.status})`);
       }
+
+      const statusLabel =
+        ORDER_STATUS_OPTIONS.find((option) => option.value === selectedStatus)?.label ??
+        selectedStatus;
 
       setSelectedOrderIds(new Set());
       setSuccessMessage(
         payload?.message ??
           (orderIds.length === 1
-            ? "Order finalized successfully."
-            : `${orderIds.length} orders finalized successfully.`)
+            ? `Order status updated to "${statusLabel}".`
+            : `${orderIds.length} orders updated to "${statusLabel}".`)
       );
       await loadOrders();
     } catch (err) {
@@ -666,7 +674,6 @@ export default function AdminOrdersView() {
           <OrderFilter label="Assign Date (From)" placeholder="" type="date" />
           <OrderFilter label="Assign Date (To)" placeholder="" type="date" />
           <OrderFilter label="Rider" placeholder="Select Rider" type="select" />
-          <OrderFilter label="Status" placeholder="Select Status" type="select" />
           <div className="md:col-span-3 pt-2">
             <Button className="w-full h-10 font-bold bg-primary text-white shadow-md">Search</Button>
           </div>
@@ -675,7 +682,6 @@ export default function AdminOrdersView() {
         <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4">
           <OrderFilter label="Tracking Numbers" placeholder="Enter Tracking Numbers" />
           <OrderFilter label="Rollcart Number" placeholder="Enter Rollcart Number" />
-          <OrderFilter label="Status" placeholder="Select Status" type="select" />
           <Button className="w-full h-10 font-bold bg-primary text-white shadow-md">Search</Button>
         </div>
       </div>
@@ -711,16 +717,35 @@ export default function AdminOrdersView() {
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <button
                 type="button"
                 onClick={handleFinalizeOrders}
-                disabled={finalizingOrders || loadingOrders || selectedOrderIds.size === 0}
+                disabled={finalizingOrders || loadingOrders || selectedOrderIds.size === 0 || !selectedStatus}
                 className="h-8 px-4 bg-green-500 text-white text-[10px] font-bold rounded uppercase flex items-center gap-1.5 hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check size={12} />
                 {finalizingOrders ? "Finalizing…" : "Finalize"}
               </button>
+              <div className="relative">
+                <select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                  disabled={finalizingOrders}
+                  className="h-8 min-w-[180px] pl-3 pr-8 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20"
+                >
+                  <option value="">Select Status</option>
+                  {ORDER_STATUS_OPTIONS.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  size={12}
+                />
+              </div>
               <button className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase">Cancel</button>
             </div>
             <div className="flex items-center gap-2 border-l pl-4 border-slate-200">

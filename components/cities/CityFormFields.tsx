@@ -52,6 +52,18 @@ export function CityFormFields({
       </div>
 
       <div className="space-y-1.5">
+        <label className={dialogLabelClass}>Province *</label>
+        <input
+          type="text"
+          value={values.province}
+          onChange={(e) => onChange("province", e.target.value)}
+          placeholder="Enter province"
+          className={dialogInputClass}
+          required
+        />
+      </div>
+
+      <div className="space-y-1.5">
         <label className={dialogLabelClass}>Short Form *</label>
         <input
           type="text"

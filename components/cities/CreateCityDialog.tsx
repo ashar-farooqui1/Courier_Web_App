@@ -19,6 +19,7 @@ const emptyForm: CreateCityPayload = {
   cityName: "",
   zoneId: 0,
   shortForm: "",
+  province: "",
   status: "Active",
 };
 
@@ -72,10 +73,11 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
       cityName: values.cityName.trim(),
       zoneId: Number(values.zoneId),
       shortForm: values.shortForm.trim().toUpperCase(),
+      province: values.province.trim(),
       status: values.status.trim(),
     };
 
-    if (!payload.cityName || !payload.shortForm || !payload.status) {
+    if (!payload.cityName || !payload.shortForm || !payload.province || !payload.status) {
       setError("Please fill in all required fields.");
       setSubmitting(false);
       return;

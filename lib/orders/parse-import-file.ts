@@ -106,6 +106,8 @@ const HEADER_MAP: Record<keyof BulkUploadShipmentPreview, string[]> = {
     "cash on delivery",
     "order amount",
   ],
+  locationId: ["location id", "locationid", "location_id", "pickup location id"],
+  serviceId: ["service id", "serviceid", "service_id"],
   service: [
     "service",
     "service name",
@@ -193,6 +195,8 @@ function mapRowWithColumns(
     quantity: read("quantity", true),
     weight: read("weight", true),
     amount: read("amount", true),
+    locationId: read("locationId", true),
+    serviceId: read("serviceId", true),
     service: read("service") as string,
     replacementId: read("replacementId") as string,
   };
@@ -219,6 +223,55 @@ function parseCsvLine(line: string): string[] {
 
   values.push(current.trim());
   return values;
+}
+
+function findHeaderRowIndex(rows: unknown[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 15); i += 1) {
+    const row = rows[i];
+    if (!Array.isArray(row)) continue;
+
+    const normalized = row.map((cell) => normalizeHeader(String(cell ?? "")));
+    const hasConsignee = normalized.some(
+      (cell) => cell.includes("consignee") || cell.includes("receiver")
+    );
+    const hasProduct = normalized.some(
+      (cell) => cell.includes("product") || cell.includes("pieces") || cell === "cod"
+    );
+
+    if (hasConsignee && hasProduct) return i;
+  }
+
+  return 0;
+}
+
+function recordsFromSheetRows(rows: unknown[][]): Record<string, unknown>[] {
+  if (rows.length === 0) return [];
+
+  const headerRowIndex = findHeaderRowIndex(rows);
+  const headerRow = rows[headerRowIndex];
+  if (!Array.isArray(headerRow)) return [];
+
+  const headers = headerRow.map((cell) => String(cell ?? "").trim());
+  const records: Record<string, unknown>[] = [];
+
+  for (let i = headerRowIndex + 1; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (!Array.isArray(row)) continue;
+
+    const record: Record<string, unknown> = {};
+    let hasValue = false;
+
+    headers.forEach((header, index) => {
+      if (!header) return;
+      const value = row[index] ?? "";
+      record[header] = value;
+      if (String(value).trim()) hasValue = true;
+    });
+
+    if (hasValue) records.push(record);
+  }
+
+  return records;
 }
 
 function parseRows(records: Record<string, unknown>[]): BulkUploadShipmentPreview[] {
@@ -270,12 +323,13 @@ async function parseExcelBuffer(buffer: Buffer): Promise<BulkUploadShipmentPrevi
   if (!sheetName) return [];
 
   const sheet = workbook.Sheets[sheetName];
-  const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+  const sheetRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
     defval: "",
     raw: false,
   });
 
-  return parseRows(jsonRows);
+  return parseRows(recordsFromSheetRows(sheetRows));
 }
 
 export async function parseOrderImportBuffer(

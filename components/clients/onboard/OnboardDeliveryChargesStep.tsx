@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { dialogLabelClass } from "@/components/ui/dialog-styles";
+import { dialogInputClass, dialogLabelClass } from "@/components/ui/dialog-styles";
 import { ChargeSlabEditor } from "@/components/clients/onboard/ChargeSlabEditor";
+import { parseApiErrorMessage } from "@/lib/api/errors";
+import type { AdminSettings } from "@/lib/types/admin-settings";
 import type {
   DeliverySettingsValues,
   ServiceChargeConfig,
@@ -22,21 +24,60 @@ export function OnboardDeliveryChargesStep({
   serviceCharges,
   onServiceChargesChange,
 }: OnboardDeliveryChargesStepProps) {
+  const [petrolCurrentPrice, setPetrolCurrentPrice] = useState<string | null>(null);
+  const [petrolPriceLoading, setPetrolPriceLoading] = useState(false);
+  const [petrolPriceError, setPetrolPriceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings.isFlexibleFuelSurcharge) {
+      setPetrolCurrentPrice(null);
+      setPetrolPriceError(null);
+      setPetrolPriceLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setPetrolPriceLoading(true);
+    setPetrolPriceError(null);
+
+    fetch("/api/admin/settings")
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(
+            parseApiErrorMessage(body, `Failed to load fuel price (${response.status})`)
+          );
+        }
+
+        const data: AdminSettings = await response.json();
+        if (!cancelled) {
+          setPetrolCurrentPrice(String(data.petrolCurrentPrice ?? ""));
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPetrolCurrentPrice(null);
+          setPetrolPriceError(
+            error instanceof Error ? error.message : "Failed to load fuel price from settings"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPetrolPriceLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.isFlexibleFuelSurcharge]);
+
   const updateSetting = <K extends keyof DeliverySettingsValues>(
     field: K,
     value: DeliverySettingsValues[K]
   ) => {
-    let next: DeliverySettingsValues = { ...settings, [field]: value };
-
-    if (field === "isFixedFuelSurcharge" && value === true) {
-      next = { ...next, isFlexibleFuelSurcharge: false };
-    }
-
-    if (field === "isFlexibleFuelSurcharge" && value === true) {
-      next = { ...next, isFixedFuelSurcharge: false };
-    }
-
-    onSettingsChange(next);
+    onSettingsChange({ ...settings, [field]: value });
   };
 
   const updateService = (
@@ -71,24 +112,6 @@ export function OnboardDeliveryChargesStep({
         <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
           <input
             type="checkbox"
-            checked={settings.isPerKg}
-            onChange={(e) => updateSetting("isPerKg", e.target.checked)}
-            className="rounded border-slate-300 text-primary focus:ring-primary"
-          />
-          Per KG
-        </label>
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-          <input
-            type="checkbox"
-            checked={settings.isMonthlyInvoicing}
-            onChange={(e) => updateSetting("isMonthlyInvoicing", e.target.checked)}
-            className="rounded border-slate-300 text-primary focus:ring-primary"
-          />
-          Is Monthly Invoicing
-        </label>
-        <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-          <input
-            type="checkbox"
             checked={settings.isFixedFuelSurcharge}
             onChange={(e) => updateSetting("isFixedFuelSurcharge", e.target.checked)}
             className="rounded border-slate-300 text-primary focus:ring-primary"
@@ -116,20 +139,43 @@ export function OnboardDeliveryChargesStep({
       </div>
 
       <div className="flex flex-wrap items-end gap-4">
-        <div className="space-y-1">
-          <label className={dialogLabelClass}>Fuel Surcharge</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={settings.fuelSurchargeValue}
-              onChange={(e) => updateSetting("fuelSurchargeValue", e.target.value)}
-              className="w-24 h-10 px-3 border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
-            />
-            <span className="text-xs font-bold text-slate-500">%</span>
+        {settings.isFixedFuelSurcharge ? (
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Fuel Surcharge</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={settings.fuelSurchargeValue}
+                onChange={(e) => updateSetting("fuelSurchargeValue", e.target.value)}
+                className="w-24 h-10 px-3 border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+              />
+              <span className="text-xs font-bold text-slate-500">%</span>
+            </div>
           </div>
-        </div>
+        ) : null}
+
+        {settings.isFlexibleFuelSurcharge ? (
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Fuel Price (from settings)</label>
+            <input
+              type="text"
+              readOnly
+              value={
+                petrolPriceLoading
+                  ? "Loading..."
+                  : petrolCurrentPrice !== null
+                    ? petrolCurrentPrice
+                    : "—"
+              }
+              className={`${dialogInputClass} w-32 bg-slate-50 text-slate-600 cursor-not-allowed`}
+            />
+            {petrolPriceError ? (
+              <p className="text-[11px] text-red-600 font-medium">{petrolPriceError}</p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap gap-2 border border-slate-200 rounded-lg p-3 bg-slate-50/50">

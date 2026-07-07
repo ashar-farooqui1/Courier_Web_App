@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { parseApiErrorMessage } from "@/lib/api/errors";
+import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
@@ -210,18 +212,15 @@ export default function ClientOrdersView() {
         headers: buildAppAuthHeaders(token, role, clientId),
       });
 
-      const payload = (await response.json().catch(() => null)) as
-        | ClientOrder[]
-        | { message?: string }
-        | null;
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        const message =
-          payload && !Array.isArray(payload) ? payload.message : undefined;
-        throw new Error(message ?? `Failed to load orders (${response.status})`);
+        throw new Error(
+          parseApiErrorMessage(payload, `Failed to load orders (${response.status})`)
+        );
       }
 
-      setOrders(Array.isArray(payload) ? payload : []);
+      setOrders(unwrapOrdersList(payload));
     } catch (err) {
       setOrders([]);
       setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
@@ -436,6 +435,7 @@ export default function ClientOrdersView() {
         isOpen={modalStates.addNew}
         onClose={() => toggleModal("addNew", false)}
         onSuccess={handleOrderCreated}
+        variant="client"
       />
 
       {(ordersError || actionError || successMessage) && (

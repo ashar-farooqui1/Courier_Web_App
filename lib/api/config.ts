@@ -7,6 +7,8 @@ export const API_ROUTES = {
   createClient: "/api/Client/CreateClient",
   onboardClient: "/api/Client/OnboardClient",
   uploadClientLogo: (clientId: number | string) => `/api/Client/${clientId}/UploadLogo`,
+  uploadClientDocuments: (clientId: number | string) =>
+    `/api/Client/${clientId}/UploadDocument`,
   clientById: (clientId: number | string) => `/api/Client/${clientId}`,
   clientAssignedServices: (clientId: number | string) =>
     `/api/Client/GetClientAssignedServices?clientId=${clientId}`,
@@ -41,6 +43,7 @@ export const API_ROUTES = {
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",
   adminById: (adminId: number | string) => `/api/Admin/admin/${adminId}`,
+  adminSettings: "/api/Admin/settings",
 
   cities: "/api/Admin/GetAllCities",
   createCity: "/api/Admin/CreateCity",
@@ -48,6 +51,7 @@ export const API_ROUTES = {
   deleteCity: (cityId: number | string) => `/api/Admin/DeleteCity?id=${cityId}`,
   searchCities: (keyword: string) =>
     `/api/Admin/SearchCities?keyword=${encodeURIComponent(keyword)}`,
+  bulkUploadCities: "/api/Admin/BulkUploadCities",
   zones: "/api/Admin/GetAllZones",
   services: "/api/Admin/GellAllService",
 

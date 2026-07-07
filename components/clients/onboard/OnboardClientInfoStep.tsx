@@ -2,29 +2,28 @@
 
 import React from "react";
 import {
-  dialogFileInputClass,
   dialogInputClass,
   dialogLabelClass,
 } from "@/components/ui/dialog-styles";
 import type { Admin } from "@/types/admin";
 import type { City } from "@/lib/types/city";
-import type { OnboardClientInfoValues } from "@/lib/types/onboard-client";
+import type { BankDetailsValues, OnboardClientInfoValues } from "@/lib/types/onboard-client";
 interface OnboardClientInfoStepProps {
   values: OnboardClientInfoValues;
   onChange: (field: keyof OnboardClientInfoValues, value: string | boolean) => void;
+  bankDetails: BankDetailsValues;
+  onBankDetailsChange: (field: keyof BankDetailsValues, value: string) => void;
   cities: City[];
   admins: Admin[];
-  logoFile: File | null;
-  onLogoChange: (file: File | null) => void;
 }
 
 export function OnboardClientInfoStep({
   values,
   onChange,
+  bankDetails,
+  onBankDetailsChange,
   cities,
   admins,
-  logoFile,
-  onLogoChange,
 }: OnboardClientInfoStepProps) {
   return (
     <div className="space-y-8">
@@ -145,21 +144,6 @@ export function OnboardClientInfoStep({
               ))}
             </select>
           </div>
-
-          <div className="space-y-1">
-            <label className={dialogLabelClass}>Client Logo</label>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => onLogoChange(e.target.files?.[0] ?? null)}
-              className={dialogFileInputClass}
-            />
-            {logoFile ? (
-              <p className="text-[10px] text-slate-400 truncate">{logoFile.name}</p>
-            ) : (
-              <p className="text-[10px] text-slate-400">No file chosen</p>
-            )}
-          </div>
         </div>
       </div>
 
@@ -256,6 +240,78 @@ export function OnboardClientInfoStep({
             Set as default pickup location
           </span>
         </label>
+      </div>
+
+      <div className="space-y-4 border-t border-slate-100 pt-6">
+        <h2 className="text-sm font-bold text-slate-700">Bank Details:</h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Bank Name</label>
+            <input
+              type="text"
+              value={bankDetails.bankName}
+              onChange={(e) => onBankDetailsChange("bankName", e.target.value)}
+              placeholder="Bank Name"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Account Title</label>
+            <input
+              type="text"
+              value={bankDetails.accountTitle}
+              onChange={(e) => onBankDetailsChange("accountTitle", e.target.value)}
+              placeholder="Account Title"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Branch Name</label>
+            <input
+              type="text"
+              value={bankDetails.branchName}
+              onChange={(e) => onBankDetailsChange("branchName", e.target.value)}
+              placeholder="Branch Name"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>IBAN</label>
+            <input
+              type="text"
+              value={bankDetails.iban}
+              onChange={(e) => onBankDetailsChange("iban", e.target.value)}
+              placeholder="IBAN"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Account Number</label>
+            <input
+              type="text"
+              value={bankDetails.accountNumber}
+              onChange={(e) => onBankDetailsChange("accountNumber", e.target.value)}
+              placeholder="Account Number"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>Bank City</label>
+            <input
+              type="text"
+              value={bankDetails.bankCity}
+              onChange={(e) => onBankDetailsChange("bankCity", e.target.value)}
+              placeholder="Bank City"
+              className={dialogInputClass}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );

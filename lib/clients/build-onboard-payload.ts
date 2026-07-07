@@ -1,17 +1,32 @@
 import { getStoredAdminId } from '@/lib/auth/role';
 import { CREATE_CLIENT_ROLE_ID } from '@/lib/clients/client-form';
-import { buildSaveDeliverySettingsPayload } from '@/lib/clients/delivery-charges-form';
+import { resolveFuelSurchargeValue } from '@/lib/clients/delivery-charges-form';
 import type { City } from "@/lib/types/city";
 import type {
+  BankDetailsValues,
   DeliverySettingsValues,
   OnboardClientInfoValues,
   OnboardClientRequest,
+  OnboardDeliverySettingsPayload,
   ServiceChargeConfig,
 } from "@/lib/types/onboard-client";
+
+function buildOnboardDeliverySettingsPayload(
+  settings: DeliverySettingsValues
+): OnboardDeliverySettingsPayload {
+  return {
+    clientId: 0,
+    isFixedFuelSurcharge: settings.isFixedFuelSurcharge,
+    isFlexibleFuelSurcharge: settings.isFlexibleFuelSurcharge,
+    isReturnCharges: settings.isReturnCharges,
+    fuelSurchargeValue: resolveFuelSurchargeValue(settings),
+  };
+}
 
 export function buildOnboardClientPayload(
   info: OnboardClientInfoValues,
   settings: DeliverySettingsValues,
+  bankDetails: BankDetailsValues,
   serviceCharges: ServiceChargeConfig[],
   cities: City[]
 ): OnboardClientRequest {
@@ -56,10 +71,11 @@ export function buildOnboardClientPayload(
       services: enabledServiceIds.join(","),
       roleId: CREATE_CLIENT_ROLE_ID,
       createdByAdminId: getStoredAdminId(),
-      deliverySettings: buildSaveDeliverySettingsPayload(0, settings),
+      deliverySettings: buildOnboardDeliverySettingsPayload(settings),
     },
     pickupLocation: {
       clientId: 0,
+      brandName: info.brandName.trim(),
       contactPerson: info.pickupContactPerson.trim(),
       contactPhone: info.pickupContactPhone.trim(),
       locationName: info.pickupLocationName.trim(),
@@ -67,6 +83,14 @@ export function buildOnboardClientPayload(
       area: info.pickupArea.trim(),
       cityId: Number(info.pickupCityId),
       isDefault: info.pickupIsDefault,
+    },
+    bankDetails: {
+      bankName: bankDetails.bankName.trim(),
+      accountTitle: bankDetails.accountTitle.trim(),
+      branchName: bankDetails.branchName.trim(),
+      iban: bankDetails.iban.trim(),
+      accountNumber: bankDetails.accountNumber.trim(),
+      bankCity: bankDetails.bankCity.trim(),
     },
     deliveryCharge,
   };

@@ -47,15 +47,20 @@ export function normalizeDeliverySettings(raw: unknown): ClientDeliverySettings 
   };
 }
 
-/** Backend accepts only one fuel surcharge mode at a time. */
-export function applyFuelSurchargeExclusivity(
-  settings: DeliverySettingsValues
-): DeliverySettingsValues {
-  if (settings.isFixedFuelSurcharge && settings.isFlexibleFuelSurcharge) {
-    return { ...settings, isFlexibleFuelSurcharge: false };
+export function validateDeliverySettings(settings: DeliverySettingsValues): string | null {
+  if (settings.isFixedFuelSurcharge) {
+    const value = Number(settings.fuelSurchargeValue);
+    if (!Number.isFinite(value) || value < 0) {
+      return "Please enter a valid fuel surcharge percentage.";
+    }
   }
 
-  return settings;
+  return null;
+}
+
+export function resolveFuelSurchargeValue(settings: DeliverySettingsValues): number {
+  if (!settings.isFixedFuelSurcharge) return 0;
+  return Number(settings.fuelSurchargeValue) || 0;
 }
 
 export function settingsToFormValues(settings: ClientDeliverySettings | null): DeliverySettingsValues {
@@ -65,14 +70,14 @@ export function settingsToFormValues(settings: ClientDeliverySettings | null): D
     return { ...defaultDeliverySettingsValues };
   }
 
-  return applyFuelSurchargeExclusivity({
+  return {
     isPerKg: normalized.isPerKg,
     isMonthlyInvoicing: normalized.isMonthlyInvoicing,
     isFixedFuelSurcharge: normalized.isFixedFuelSurcharge,
     isFlexibleFuelSurcharge: normalized.isFlexibleFuelSurcharge,
     isReturnCharges: normalized.isReturnCharges,
     fuelSurchargeValue: String(normalized.fuelSurchargeValue ?? 0),
-  });
+  };
 }
 
 export function unwrapDeliverySettingsResponse(body: unknown): unknown {
@@ -93,16 +98,14 @@ export function buildSaveDeliverySettingsPayload(
   clientId: number,
   settings: DeliverySettingsValues
 ): SaveDeliverySettingsPayload {
-  const resolved = applyFuelSurchargeExclusivity(settings);
-
   return {
     clientId,
-    isPerKg: resolved.isPerKg,
-    isMonthlyInvoicing: resolved.isMonthlyInvoicing,
-    isFixedFuelSurcharge: resolved.isFixedFuelSurcharge,
-    isFlexibleFuelSurcharge: resolved.isFlexibleFuelSurcharge,
-    isReturnCharges: resolved.isReturnCharges,
-    fuelSurchargeValue: Number(resolved.fuelSurchargeValue) || 0,
+    isPerKg: settings.isPerKg,
+    isMonthlyInvoicing: settings.isMonthlyInvoicing,
+    isFixedFuelSurcharge: settings.isFixedFuelSurcharge,
+    isFlexibleFuelSurcharge: settings.isFlexibleFuelSurcharge,
+    isReturnCharges: settings.isReturnCharges,
+    fuelSurchargeValue: resolveFuelSurchargeValue(settings),
   };
 }
 

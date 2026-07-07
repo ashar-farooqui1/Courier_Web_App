@@ -11,6 +11,22 @@ import type { Client } from "@/lib/types/client";
 import type { PickupLocation } from "@/lib/types/pickup-location";
 import type { Service } from "@/lib/types/service";
 
+function unwrapServices(payload: unknown): Service[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    const data = record.data ?? record.Data;
+    if (Array.isArray(data)) {
+      return data as Service[];
+    }
+  }
+
+  return [];
+}
+
 const inputClass =
   "w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-slate-300 disabled:opacity-70 disabled:cursor-not-allowed";
 
@@ -180,18 +196,17 @@ export function AddClientOrderDialog({
 
     try {
       const response = await fetch("/api/services");
-      const payload = (await response.json().catch(() => null)) as
-        | Service[]
-        | { message?: string }
-        | null;
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
         const message =
-          payload && !Array.isArray(payload) ? payload.message : undefined;
-        throw new Error(message ?? `Failed to load services (${response.status})`);
+          payload && typeof payload === "object" && "message" in payload
+            ? String((payload as { message?: string }).message ?? "")
+            : undefined;
+        throw new Error(message || `Failed to load services (${response.status})`);
       }
 
-      const allServices = Array.isArray(payload) ? payload : [];
+      const allServices = unwrapServices(payload);
       setServices(allServices);
 
       if (allServices.length === 1) {
@@ -395,6 +410,11 @@ export function AddClientOrderDialog({
 
     if (payload.destinationCityId < 1) {
       setSubmitError("Please select destination city.");
+      return;
+    }
+
+    if (payload.originCityId < 1) {
+      setSubmitError("Pickup location origin city is missing. Please select another pickup location.");
       return;
     }
 

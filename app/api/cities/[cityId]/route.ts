@@ -13,14 +13,22 @@ function parseCityId(cityId: string): number | null {
 function parsePayload(body: UpdateCityPayload): UpdateCityPayload | null {
   const cityName = String(body.cityName ?? "").trim();
   const shortForm = String(body.shortForm ?? "").trim();
+  const province = String(body.province ?? "").trim();
   const status = String(body.status ?? "").trim();
   const zoneId = Number(body.zoneId);
 
-  if (!cityName || !shortForm || !status || !Number.isFinite(zoneId) || zoneId <= 0) {
+  if (
+    !cityName ||
+    !shortForm ||
+    !province ||
+    !status ||
+    !Number.isFinite(zoneId) ||
+    zoneId <= 0
+  ) {
     return null;
   }
 
-  return { cityName, zoneId, shortForm, status };
+  return { cityName, zoneId, shortForm, province, status };
 }
 
 export async function PUT(request: Request, context: RouteContext) {

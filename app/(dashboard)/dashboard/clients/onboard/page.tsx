@@ -6,24 +6,30 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { OnboardClientInfoStep } from "@/components/clients/onboard/OnboardClientInfoStep";
 import { OnboardDeliveryChargesStep } from "@/components/clients/onboard/OnboardDeliveryChargesStep";
+import { OnboardDocumentsStep } from "@/components/clients/onboard/OnboardDocumentsStep";
 import { buildOnboardClientPayload } from "@/lib/clients/build-onboard-payload";
+import { validateDeliverySettings } from "@/lib/clients/delivery-charges-form";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { Admin } from "@/types/admin";
 import type { City } from "@/lib/types/city";
 import type {
+  BankDetailsValues,
+  ClientDocumentFiles,
   DeliverySettingsValues,
   OnboardClientInfoValues,
   ServiceChargeConfig,
 } from "@/lib/types/onboard-client";
 import {
   createDefaultChargeSlabs as makeDefaultSlabs,
+  defaultBankDetailsValues,
+  defaultClientDocumentFiles,
   defaultDeliverySettingsValues as defaultSettings,
   defaultOnboardClientInfoValues as defaultInfo,
 } from "@/lib/types/onboard-client";
 import type { Service } from "@/lib/types/service";
 import type { Zone } from "@/lib/types/zone";
 
-type OnboardStep = "client-info" | "delivery-charges";
+type OnboardStep = "client-info" | "delivery-charges" | "documents";
 
 function initServiceCharges(services: Service[], zones: Zone[]): ServiceChargeConfig[] {
   return services.map((service) => ({
@@ -65,10 +71,13 @@ export default function OnboardClientPage() {
   const router = useRouter();
   const [step, setStep] = useState<OnboardStep>("client-info");
   const [infoValues, setInfoValues] = useState<OnboardClientInfoValues>(defaultInfo);
+  const [bankDetails, setBankDetails] = useState<BankDetailsValues>(defaultBankDetailsValues);
   const [deliverySettings, setDeliverySettings] =
     useState<DeliverySettingsValues>(defaultSettings);
   const [serviceCharges, setServiceCharges] = useState<ServiceChargeConfig[]>([]);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [documentFiles, setDocumentFiles] =
+    useState<ClientDocumentFiles>(defaultClientDocumentFiles);
+  const [createdClientId, setCreatedClientId] = useState<number | null>(null);
 
   const [cities, setCities] = useState<City[]>([]);
   const [admins, setAdmins] = useState<Admin[]>([]);
@@ -144,10 +153,19 @@ export default function OnboardClientPage() {
     setInfoValues((prev) => ({ ...prev, [field]: value }));
   };
 
-  const stepLabel = useMemo(
-    () => (step === "client-info" ? "Client Details" : "Delivery Charges"),
-    [step]
-  );
+  const setBankDetailsField = (field: keyof BankDetailsValues, value: string) => {
+    setBankDetails((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const setDocumentField = (field: keyof ClientDocumentFiles, file: File | null) => {
+    setDocumentFiles((prev) => ({ ...prev, [field]: file }));
+  };
+
+  const stepLabel = useMemo(() => {
+    if (step === "client-info") return "Client Details";
+    if (step === "delivery-charges") return "Delivery Charges";
+    return "Upload Documents";
+  }, [step]);
 
   const handleNext = () => {
     const validationError = validateClientInfo(infoValues);
@@ -161,10 +179,14 @@ export default function OnboardClientPage() {
 
   const handleBack = () => {
     setError(null);
+    if (step === "documents") {
+      setStep("delivery-charges");
+      return;
+    }
     setStep("client-info");
   };
 
-  const handleSubmit = async () => {
+  const handleCreateClient = async () => {
     const validationError = validateClientInfo(infoValues);
     if (validationError) {
       setError(validationError);
@@ -177,6 +199,12 @@ export default function OnboardClientPage() {
       return;
     }
 
+    const deliveryValidationError = validateDeliverySettings(deliverySettings);
+    if (deliveryValidationError) {
+      setError(deliveryValidationError);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -184,6 +212,7 @@ export default function OnboardClientPage() {
       const payload = buildOnboardClientPayload(
         infoValues,
         deliverySettings,
+        bankDetails,
         serviceCharges,
         cities
       );
@@ -200,29 +229,65 @@ export default function OnboardClientPage() {
         throw new Error(parseApiErrorMessage(body, `Onboard failed (${response.status})`));
       }
 
-      const clientId = (body as { clientId?: number }).clientId;
+      const clientId =
+        (body as { clientId?: number }).clientId ??
+        (typeof (body as { data?: unknown }).data === "number"
+          ? (body as { data: number }).data
+          : undefined);
+      if (!clientId) {
+        throw new Error("Client created but client ID was not returned.");
+      }
 
-      if (logoFile && clientId) {
-        const logoForm = new FormData();
-        logoForm.append("clientId", String(clientId));
-        logoForm.append("logo", logoFile);
+      setCreatedClientId(clientId);
+      setStep("documents");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to onboard client");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-        const logoResponse = await fetch("/api/clients/onboard", {
-          method: "PUT",
-          body: logoForm,
-        });
+  const handleUploadDocuments = async () => {
+    if (!createdClientId) {
+      setError("Client ID not found. Please complete delivery charges first.");
+      setStep("delivery-charges");
+      return;
+    }
 
-        if (!logoResponse.ok) {
-          const logoBody = await logoResponse.json().catch(() => ({}));
-          throw new Error(
-            parseApiErrorMessage(logoBody, "Client created but logo upload failed")
-          );
-        }
+    if (
+      !documentFiles.logo ||
+      !documentFiles.cnicFront ||
+      !documentFiles.cnicBack ||
+      !documentFiles.blankCheque
+    ) {
+      setError("Please upload logo, CNIC front, CNIC back, and bank cheque images.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("Logo", documentFiles.logo);
+      formData.append("CnicFront", documentFiles.cnicFront);
+      formData.append("CnicBack", documentFiles.cnicBack);
+      formData.append("BlankCheque", documentFiles.blankCheque);
+
+      const response = await fetch(`/api/clients/${createdClientId}/upload-document`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(parseApiErrorMessage(body, `Document upload failed (${response.status})`));
       }
 
       router.push("/dashboard/clients?onboarded=1");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to onboard client");
+      setError(err instanceof Error ? err.message : "Failed to upload documents");
     } finally {
       setSubmitting(false);
     }
@@ -248,6 +313,10 @@ export default function OnboardClientPage() {
           <span className={step === "delivery-charges" ? "text-primary" : "text-slate-400"}>
             2. Delivery Charges
           </span>
+          <span className="text-slate-300">/</span>
+          <span className={step === "documents" ? "text-primary" : "text-slate-400"}>
+            3. Documents
+          </span>
         </div>
       </div>
 
@@ -270,23 +339,25 @@ export default function OnboardClientPage() {
             <OnboardClientInfoStep
               values={infoValues}
               onChange={setInfoField}
+              bankDetails={bankDetails}
+              onBankDetailsChange={setBankDetailsField}
               cities={cities}
               admins={admins}
-              logoFile={logoFile}
-              onLogoChange={setLogoFile}
             />
-          ) : (
+          ) : step === "delivery-charges" ? (
             <OnboardDeliveryChargesStep
               settings={deliverySettings}
               onSettingsChange={setDeliverySettings}
               serviceCharges={serviceCharges}
               onServiceChargesChange={setServiceCharges}
             />
+          ) : (
+            <OnboardDocumentsStep files={documentFiles} onChange={setDocumentField} />
           )}
         </div>
 
         <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
-          {step === "delivery-charges" ? (
+          {step !== "client-info" ? (
             <button
               type="button"
               onClick={handleBack}
@@ -306,14 +377,23 @@ export default function OnboardClientPage() {
             >
               Next
             </button>
-          ) : (
+          ) : step === "delivery-charges" ? (
             <button
               type="button"
-              onClick={handleSubmit}
+              onClick={handleCreateClient}
               disabled={submitting || loading}
               className="h-10 px-8 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md hover:bg-primary/90 disabled:opacity-50"
             >
-              {submitting ? "Submitting…" : "Submit"}
+              {submitting ? "Saving…" : "Next"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleUploadDocuments}
+              disabled={submitting || loading}
+              className="h-10 px-8 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md hover:bg-primary/90 disabled:opacity-50"
+            >
+              {submitting ? "Uploading…" : "Finish"}
             </button>
           )}
         </div>

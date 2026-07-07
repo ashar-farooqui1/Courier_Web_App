@@ -10,6 +10,7 @@ import type {
   CreateOrderApiResponse,
   CreateOrderPayload,
   OrderPickupLocationDetails,
+  UpdateOrderStatusApiResponse,
   UpdateOrderStatusPayload,
 } from '@/lib/types/order';
 
@@ -129,15 +130,29 @@ async function parseCreateOrderResponse(
   if (!text) return 'Order created successfully';
 
   try {
-    const payload = JSON.parse(text) as CreateOrderApiResponse;
-    if (payload.success === false) {
+    const payload = JSON.parse(text) as CreateOrderApiResponse & {
+      Success?: boolean;
+      Message?: string | null;
+    };
+
+    const apiSuccess = payload.success ?? payload.Success;
+    if (apiSuccess === false) {
       throw new ApiError(
         parseApiErrorMessage(payload, fallbackError),
         response.status,
         payload
       );
     }
-    return payload.message ?? 'Order created successfully';
+
+    if (typeof payload.message === 'string' && payload.message) {
+      return payload.message;
+    }
+
+    if (typeof payload.Message === 'string' && payload.Message) {
+      return payload.Message;
+    }
+
+    return 'Order created successfully';
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (text === 'true') return 'Order created successfully';
@@ -204,6 +219,35 @@ function buildOrdersUrl(clientId?: number): string {
   return API_ROUTES.orders;
 }
 
+export function unwrapOrdersList(payload: unknown): ClientOrder[] {
+  if (!payload) return [];
+
+  let rows: unknown[] = [];
+
+  if (Array.isArray(payload)) {
+    rows = payload;
+  } else if (typeof payload === 'object') {
+    const record = payload as Record<string, unknown>;
+    const success = record.success ?? record.Success;
+    if (success === false) {
+      throw new ApiError(
+        parseApiErrorMessage(payload, 'Failed to fetch orders'),
+        500,
+        payload
+      );
+    }
+
+    const data = record.data ?? record.Data;
+    if (Array.isArray(data)) {
+      rows = data;
+    }
+  }
+
+  return rows
+    .map(normalizeClientOrder)
+    .filter((order): order is ClientOrder => order !== null);
+}
+
 async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientOrder[]> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -238,18 +282,9 @@ async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientO
   if (!text) return [];
 
   try {
-    const parsed = JSON.parse(text) as unknown;
-    const rows = Array.isArray(parsed)
-      ? parsed
-      : parsed &&
-          typeof parsed === 'object' &&
-          Array.isArray((parsed as { data?: unknown[] }).data)
-        ? (parsed as { data: unknown[] }).data
-        : [];
-    return rows
-      .map(normalizeClientOrder)
-      .filter((order): order is ClientOrder => order !== null);
-  } catch {
+    return unwrapOrdersList(JSON.parse(text) as unknown);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
     return [];
   }
 }
@@ -288,7 +323,56 @@ export async function updateOrderStatus(
     cache: 'no-store',
   });
 
-  return parseCreateOrderResponse(response, 'Failed to update order status');
+  return parseUpdateOrderStatusResponse(response, 'Failed to update order status');
+}
+
+async function parseUpdateOrderStatusResponse(
+  response: Response,
+  fallbackError: string
+): Promise<string> {
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `${fallbackError} (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) return 'Order status updated successfully';
+
+  try {
+    const payload = JSON.parse(text) as UpdateOrderStatusApiResponse;
+
+    if (payload.success === false) {
+      throw new ApiError(
+        parseApiErrorMessage(payload, fallbackError),
+        response.status,
+        payload
+      );
+    }
+
+    if (payload.data === false) {
+      throw new ApiError('Order status was not updated', response.status, payload);
+    }
+
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message;
+    }
+
+    return 'Order status updated successfully';
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (text === 'true') return 'Order status updated successfully';
+    return text || 'Order status updated successfully';
+  }
 }
 
 function pickValue(record: Record<string, unknown>, keys: string[]): string | number {
@@ -328,6 +412,13 @@ export function normalizeBulkUploadShipment(raw: unknown): BulkUploadShipmentPre
     quantity: pickValue(record, ['quantity', 'Quantity']),
     weight: pickValue(record, ['weight', 'Weight']),
     amount: pickValue(record, ['amount', 'Amount']),
+    locationId: pickValue(record, [
+      'locationId',
+      'LocationId',
+      'Location_id',
+      'Locationid',
+    ]),
+    serviceId: pickValue(record, ['serviceId', 'ServiceId']),
     service: pickString(record, ['service', 'Service', 'serviceName', 'ServiceName']),
     replacementId: pickString(record, ['replacementId', 'ReplacementId', 'replacementID', 'ReplacementID']),
   };
@@ -342,17 +433,57 @@ function extractBulkUploadShipments(data: unknown): BulkUploadShipmentPreview[] 
     .filter((row): row is BulkUploadShipmentPreview => row !== null);
 }
 
+function pickStatNumber(record: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    const value = Number(record[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
+function pickStatErrors(record: Record<string, unknown>): string[] {
+  const raw = record.errors ?? record.Errors;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry));
+}
+
 function parseBulkUploadStats(data: unknown): BulkUploadStats | null {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  if (!data) return null;
+
+  if (Array.isArray(data)) {
+    const successRows = data.length;
+    return {
+      totalRows: successRows,
+      successRows,
+      failedRows: 0,
+      errors: [],
+    };
+  }
+
+  if (typeof data !== 'object') return null;
 
   const record = data as Record<string, unknown>;
+  const nested =
+    record.stats && typeof record.stats === 'object' && !Array.isArray(record.stats)
+      ? (record.stats as Record<string, unknown>)
+      : record;
+
+  const totalRows = pickStatNumber(nested, ['totalRows', 'TotalRows']);
+  const successRows = pickStatNumber(nested, ['successRows', 'SuccessRows']);
+  const failedRows = pickStatNumber(nested, ['failedRows', 'FailedRows']);
+  const errors = pickStatErrors(nested);
+
+  const hasStatsField = ['totalRows', 'TotalRows', 'successRows', 'SuccessRows', 'failedRows', 'FailedRows'].some(
+    (key) => nested[key] != null
+  );
+
+  if (!hasStatsField) return null;
+
   return {
-    totalRows: Number(record.totalRows) || 0,
-    successRows: Number(record.successRows) || 0,
-    failedRows: Number(record.failedRows) || 0,
-    errors: Array.isArray(record.errors)
-      ? record.errors.filter((entry): entry is string => typeof entry === 'string')
-      : [],
+    totalRows,
+    successRows,
+    failedRows,
+    errors,
   };
 }
 

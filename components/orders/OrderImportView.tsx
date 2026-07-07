@@ -9,6 +9,7 @@ import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import type { BulkUploadShipmentPreview } from "@/lib/types/order";
 import type { ClientCity } from "@/lib/types/client-city";
 import type { PickupLocation } from "@/lib/types/pickup-location";
+import type { Service } from "@/lib/types/service";
 import { ORDER_IMPORT_TEMPLATE_FILENAME } from "@/lib/orders/order-import-template";
 
 const IMPORT_TABLE_HEADERS = [
@@ -22,7 +23,14 @@ const IMPORT_TABLE_HEADERS = [
   "Quantity",
   "Weight",
   "Amount",
+  "Location Id",
+  "Service Id",
 ] as const;
+
+function formatPreviewCell(value: number | string | undefined | null): string {
+  if (value == null || value === "") return "—";
+  return String(value);
+}
 
 const importButtonClass =
   "inline-flex items-center gap-2 h-9 px-4 bg-primary text-white text-[11px] font-bold rounded hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
@@ -94,6 +102,7 @@ export function OrderImportView() {
       .join(" - ") || "—";
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewTableRef = useRef<HTMLDivElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFileName, setSelectedFileName] = useState("");
   const [shipments, setShipments] = useState<BulkUploadShipmentPreview[]>([]);
@@ -105,6 +114,7 @@ export function OrderImportView() {
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
   const [cities, setCities] = useState<ClientCity[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [loadingReference, setLoadingReference] = useState(false);
 
   const loadReferenceData = useCallback(async () => {
@@ -112,21 +122,33 @@ export function OrderImportView() {
 
     setLoadingReference(true);
     try {
-      const [locationsRes, citiesRes] = await Promise.all([
+      const [locationsRes, citiesRes, servicesRes] = await Promise.all([
         fetch(`/api/clients/${clientId}/pickup-locations`),
         fetch(`/api/clients/${clientId}/cities`),
+        fetch("/api/services"),
       ]);
 
       const locationsPayload = (await locationsRes.json().catch(() => null)) as
         | PickupLocation[]
         | null;
       const citiesPayload = (await citiesRes.json().catch(() => null)) as ClientCity[] | null;
+      const servicesPayload = (await servicesRes.json().catch(() => null)) as
+        | Service[]
+        | { data?: Service[] }
+        | null;
 
       setPickupLocations(Array.isArray(locationsPayload) ? locationsPayload : []);
       setCities(Array.isArray(citiesPayload) ? citiesPayload : []);
+      const serviceRows = Array.isArray(servicesPayload)
+        ? servicesPayload
+        : Array.isArray(servicesPayload?.data)
+          ? servicesPayload.data
+          : [];
+      setServices(serviceRows);
     } catch {
       setPickupLocations([]);
       setCities([]);
+      setServices([]);
     } finally {
       setLoadingReference(false);
     }
@@ -138,11 +160,14 @@ export function OrderImportView() {
 
   const pickupLabels = pickupLocations.map(
     (location) =>
-      `${location.locationName} (Location_id: ${location.pickupLocationId})${
+      `${location.locationName} (Locationid: ${location.pickupLocationId})${
         location.isDefault ? " — Default" : ""
       }`
   );
   const cityLabels = cities.map((city) => city.cityName);
+  const serviceLabels = services.map(
+    (service) => `${service.serviceName} (ServiceId: ${service.serviceId})`
+  );
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -182,18 +207,22 @@ export function OrderImportView() {
   };
 
   const handleAddShipments = async () => {
-    if (!selectedFile) {
+    const file = fileInputRef.current?.files?.[0] ?? selectedFile;
+    if (!file) {
       setUploadError("Please choose a file first.");
       return;
     }
 
+    setSelectedFile(file);
+    setSelectedFileName(file.name);
     setParsing(true);
     setUploadError(null);
     setUploadMessage(null);
+    setFinalized(false);
 
     try {
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file", file);
 
       const response = await fetch("/api/orders/parse-import", {
         method: "POST",
@@ -212,13 +241,18 @@ export function OrderImportView() {
 
       const rows = Array.isArray(payload?.data) ? payload.data : [];
       if (rows.length === 0) {
-        throw new Error("No valid shipment rows found in the file.");
+        throw new Error(
+          "No valid shipment rows found. Check that row 1 has column headers and data starts from row 2."
+        );
       }
 
       setShipments(rows);
       setUploadMessage(
-        `${rows.length} shipment(s) loaded for preview. Review the table, then click Finalize Import.`
+        `${rows.length} shipment(s) loaded for preview. Scroll down to review the table, then click Finalize Import.`
       );
+      requestAnimationFrame(() => {
+        previewTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } catch (err) {
       setShipments([]);
       setUploadError(err instanceof Error ? err.message : "Failed to read import file");
@@ -260,10 +294,21 @@ export function OrderImportView() {
 
       const payload = (await response.json().catch(() => null)) as {
         message?: string;
+        details?: {
+          data?: { errors?: string[] };
+          errors?: string[];
+        };
       } | null;
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? `Finalize import failed (${response.status})`);
+        const detailErrors = payload?.details?.data?.errors ?? payload?.details?.errors;
+        const detailText =
+          Array.isArray(detailErrors) && detailErrors.length > 0
+            ? ` ${detailErrors.join(" ")}`
+            : "";
+        throw new Error(
+          `${payload?.message ?? `Finalize import failed (${response.status})`}${detailText}`
+        );
       }
 
       setFinalized(true);
@@ -307,8 +352,10 @@ export function OrderImportView() {
             <span className="font-bold">Step 1.</span> Download the excel model below and fill in the
             data. You can change the order of the columns, but you must keep their names as they are.
             At least the <span className="font-bold">Pieces</span> column needs to contain the number
-            of pieces (for example 1). Use a valid{" "}
-            <span className="font-bold">Location_id</span> from your pickup locations list below.
+            of pieces (for example 1). Column <span className="font-bold">test</span> (column 10) must
+            stay <span className="font-bold">empty</span>. Use valid{" "}
+            <span className="font-bold">Locationid</span> and <span className="font-bold">ServiceId</span>{" "}
+            from the reference lists below. Download the template — do not remove or rename columns.
           </p>
           <button
             type="button"
@@ -327,8 +374,14 @@ export function OrderImportView() {
           </div>
 
           <div className="space-y-3">
-            <p className="text-sm font-bold text-slate-800">Valid values for service</p>
+            <p className="text-sm font-bold text-slate-800">Valid reference values</p>
             <div className="flex flex-wrap gap-2">
+              <ReferenceDropdown
+                label="Services"
+                items={serviceLabels}
+                loading={loadingReference}
+                emptyMessage="No services found"
+              />
               <ReferenceDropdown
                 label="Pickup Locations"
                 items={pickupLabels}
@@ -361,7 +414,10 @@ export function OrderImportView() {
             />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (fileInputRef.current) fileInputRef.current.value = "";
+                fileInputRef.current?.click();
+              }}
               disabled={finalized}
               className="h-9 px-4 border border-slate-300 rounded bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
             >
@@ -394,11 +450,17 @@ export function OrderImportView() {
           >
             {finalizing ? "Finalizing…" : finalized ? "Import Finalized" : "Finalize Import"}
           </button>
-          <p className="text-sm font-bold text-slate-800">Total Shipments: {shipments.length}</p>
+          <p className="text-sm font-bold text-slate-800">
+            Total Shipments: {shipments.length}
+            {shipments.length > 0 ? " — preview table is below" : ""}
+          </p>
         </section>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      <div
+        ref={previewTableRef}
+        className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden"
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -427,15 +489,17 @@ export function OrderImportView() {
                 shipments.map((row, index) => (
                   <tr key={`${row.consigneeName}-${index}`} className="border-b border-slate-50">
                     <td className="p-3">{index + 1}</td>
-                    <td className="p-3 whitespace-nowrap">{row.consigneeName || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.consigneeContactNo || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.deliveryAddress || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.customerReference || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.productName || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.destination || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.quantity || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.weight || "—"}</td>
-                    <td className="p-3 whitespace-nowrap">{row.amount || "—"}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.consigneeName)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.consigneeContactNo)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.deliveryAddress)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.customerReference)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.productName)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.destination)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.quantity)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.weight)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.amount)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.locationId)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.serviceId)}</td>
                   </tr>
                 ))
               )}

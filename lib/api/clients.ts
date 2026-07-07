@@ -109,27 +109,112 @@ export async function deleteClient(clientId: number): Promise<string> {
 
 interface OnboardApiResponse {
   success?: boolean;
+  Success?: boolean;
   message?: string | null;
-  data?: { clientId?: number } | number | null;
+  Message?: string | null;
+  data?: unknown;
+  Data?: unknown;
   clientId?: number;
+  ClientId?: number;
   details?: unknown;
+  Details?: unknown;
+}
+
+function pickPositiveInt(value: unknown): number | undefined {
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return undefined;
+}
+
+function pickClientIdFromRecord(record: Record<string, unknown>): number | undefined {
+  for (const key of ['clientId', 'ClientId', 'id', 'Id']) {
+    const clientId = pickPositiveInt(record[key]);
+    if (clientId) return clientId;
+  }
+  return undefined;
 }
 
 function extractOnboardClientId(payload: OnboardApiResponse): number | undefined {
-  if (typeof payload.clientId === 'number') {
-    return payload.clientId;
+  const record = payload as Record<string, unknown>;
+
+  const topLevel = pickClientIdFromRecord(record);
+  if (topLevel) return topLevel;
+
+  const data = payload.data ?? payload.Data;
+  if (typeof data === 'number' || typeof data === 'string') {
+    const clientId = pickPositiveInt(data);
+    if (clientId) return clientId;
   }
 
-  if (typeof payload.data === 'number') {
-    return payload.data;
+  if (data && typeof data === 'object') {
+    const fromData = pickClientIdFromRecord(data as Record<string, unknown>);
+    if (fromData) return fromData;
+
+    const nested = (data as Record<string, unknown>).client ?? (data as Record<string, unknown>).Client;
+    if (nested && typeof nested === 'object') {
+      const fromNested = pickClientIdFromRecord(nested as Record<string, unknown>);
+      if (fromNested) return fromNested;
+    }
   }
 
-  if (payload.data && typeof payload.data === 'object' && 'clientId' in payload.data) {
-    const clientId = payload.data.clientId;
-    return typeof clientId === 'number' ? clientId : undefined;
+  const details = payload.details ?? payload.Details;
+  if (details && typeof details === 'object') {
+    const fromDetails = pickClientIdFromRecord(details as Record<string, unknown>);
+    if (fromDetails) return fromDetails;
   }
 
   return undefined;
+}
+
+function readApiSuccess(payload: OnboardApiResponse): boolean | undefined {
+  if (typeof payload.success === 'boolean') return payload.success;
+  if (typeof payload.Success === 'boolean') return payload.Success;
+  return undefined;
+}
+
+function readApiMessage(payload: OnboardApiResponse, fallback: string): string {
+  if (typeof payload.message === 'string' && payload.message) return payload.message;
+  if (typeof payload.Message === 'string' && payload.Message) return payload.Message;
+  return fallback;
+}
+
+function normalizeLookupValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+async function resolveOnboardedClientId(
+  payload: OnboardClientRequest,
+  body: OnboardApiResponse
+): Promise<number | undefined> {
+  const fromResponse = extractOnboardClientId(body);
+  if (fromResponse) return fromResponse;
+
+  const clientName = normalizeLookupValue(payload.client.clientName);
+  const clientEmail = normalizeLookupValue(payload.client.clientEmail);
+  const brandName = normalizeLookupValue(payload.client.brandName);
+
+  const clients = await getClients();
+  const strictMatches = clients.filter(
+    (client) =>
+      normalizeLookupValue(client.clientName) === clientName &&
+      normalizeLookupValue(client.clientEmail) === clientEmail &&
+      normalizeLookupValue(client.brandName) === brandName
+  );
+
+  const matches =
+    strictMatches.length > 0
+      ? strictMatches
+      : clients.filter(
+          (client) =>
+            normalizeLookupValue(client.clientName) === clientName &&
+            normalizeLookupValue(client.clientEmail) === clientEmail
+        );
+
+  if (matches.length === 0) return undefined;
+
+  return Math.max(...matches.map((client) => client.clientId));
 }
 
 export async function onboardClient(payload: OnboardClientRequest): Promise<OnboardClientResponse> {
@@ -154,7 +239,8 @@ export async function onboardClient(payload: OnboardClientRequest): Promise<Onbo
     }
   }
 
-  if (!response.ok || body.success === false) {
+  const apiSuccess = readApiSuccess(body);
+  if (!response.ok || apiSuccess === false) {
     throw new ApiError(
       parseApiErrorMessage(body, `Failed to onboard client (${response.status})`),
       response.status,
@@ -162,9 +248,11 @@ export async function onboardClient(payload: OnboardClientRequest): Promise<Onbo
     );
   }
 
+  const clientId = await resolveOnboardedClientId(payload, body);
+
   return {
-    message: body.message ?? 'Client onboarded successfully',
-    clientId: extractOnboardClientId(body),
+    message: readApiMessage(body, 'Client onboarded successfully'),
+    clientId,
   };
 }
 
@@ -173,4 +261,35 @@ export async function uploadClientLogo(clientId: number, logoFile: File): Promis
   formData.append('logo', logoFile);
 
   await apiPostForm(API_ROUTES.uploadClientLogo(clientId), formData);
+}
+
+export interface UploadClientDocumentsInput {
+  logo?: File | null;
+  cnicFront?: File | null;
+  cnicBack?: File | null;
+  blankCheque?: File | null;
+}
+
+export async function uploadClientDocuments(
+  clientId: number,
+  files: UploadClientDocumentsInput
+): Promise<string> {
+  const formData = new FormData();
+
+  if (files.logo) formData.append('Logo', files.logo);
+  if (files.cnicFront) formData.append('CnicFront', files.cnicFront);
+  if (files.cnicBack) formData.append('CnicBack', files.cnicBack);
+  if (files.blankCheque) formData.append('BlankCheque', files.blankCheque);
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.uploadClientDocuments(clientId)}`, {
+    method: 'POST',
+    body: formData,
+    cache: 'no-store',
+  });
+
+  return parseClientMutationResponse(
+    response,
+    'Failed to upload client documents',
+    'Client documents uploaded successfully'
+  );
 }

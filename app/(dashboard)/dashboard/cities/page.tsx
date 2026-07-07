@@ -5,6 +5,7 @@ import { FileOutput, FileSpreadsheet, Plus, Search, Edit2, Trash2 } from "lucide
 import { cn } from "@/lib/utils";
 import { CreateCityDialog } from "@/components/cities/CreateCityDialog";
 import { EditCityDialog } from "@/components/cities/EditCityDialog";
+import { ImportCitiesDialog } from "@/components/cities/ImportCitiesDialog";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { City } from "@/lib/types/city";
@@ -13,6 +14,7 @@ const TABLE_HEADERS = [
   "City ID",
   "City Name",
   "Zone",
+  "Province",
   "Short Form",
   "Status",
   "Action",
@@ -29,11 +31,13 @@ export default function CitiesPage() {
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingCity, setEditingCity] = useState<City | null>(null);
   const [cityToDelete, setCityToDelete] = useState<City | null>(null);
   const [deletingCityId, setDeletingCityId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const fetchCities = useCallback(async () => {
     setLoading(true);
@@ -110,6 +114,7 @@ export default function CitiesPage() {
         city.cityId,
         city.cityName,
         city.zoneName,
+        city.province,
         city.shortForm,
         city.status,
       ]
@@ -146,6 +151,34 @@ export default function CitiesPage() {
     setAppliedSearch("");
   };
 
+  const handleExportCities = async () => {
+    setExporting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/cities/export");
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(parseApiErrorMessage(body, `Export failed (${response.status})`));
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "cities-export.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccessMessage("Cities exported successfully");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export cities");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const rangeStart = filteredCities.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const rangeEnd = Math.min(currentPage * pageSize, filteredCities.length);
 
@@ -159,6 +192,11 @@ export default function CitiesPage() {
       <EditCityDialog
         city={editingCity}
         onClose={() => setEditingCity(null)}
+        onSuccess={handleCitySaved}
+      />
+      <ImportCitiesDialog
+        isOpen={importOpen}
+        onClose={() => setImportOpen(false)}
         onSuccess={handleCitySaved}
       />
 
@@ -187,11 +225,20 @@ export default function CitiesPage() {
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Cities</h1>
         <div className="flex items-center gap-2">
-          <button className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md flex items-center gap-2 active:scale-95 transition-all">
+          <button
+            type="button"
+            onClick={handleExportCities}
+            disabled={exporting || loading}
+            className="h-9 px-4 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md flex items-center gap-2 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
             <FileOutput size={14} />
-            Export
+            {exporting ? "Exporting..." : "Export"}
           </button>
-          <button className="h-9 px-4 bg-[#F2994A] text-white text-[11px] font-bold rounded uppercase shadow-md flex items-center gap-2 active:scale-95 transition-all">
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="h-9 px-4 bg-[#F2994A] text-white text-[11px] font-bold rounded uppercase shadow-md flex items-center gap-2 active:scale-95 transition-all"
+          >
             <FileSpreadsheet size={14} />
             Import From Excel
           </button>
@@ -312,6 +359,9 @@ export default function CitiesPage() {
                       <span className="inline-block px-2 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded uppercase">
                         {city.zoneName}
                       </span>
+                    </td>
+                    <td className="p-4 text-xs font-bold text-slate-600">
+                      {city.province ?? "—"}
                     </td>
                     <td className="p-4 text-xs font-bold text-slate-600">{city.shortForm}</td>
                     <td className="p-4">

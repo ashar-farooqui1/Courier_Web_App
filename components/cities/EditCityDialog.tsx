@@ -27,6 +27,7 @@ export function EditCityDialog({ city, onClose, onSuccess }: EditCityDialogProps
     cityName: "",
     zoneId: 0,
     shortForm: "",
+    province: "",
     status: "Active",
   });
   const [zones, setZones] = useState<Zone[]>([]);
@@ -41,6 +42,7 @@ export function EditCityDialog({ city, onClose, onSuccess }: EditCityDialogProps
       cityName: city.cityName,
       zoneId: city.zoneId,
       shortForm: city.shortForm,
+      province: city.province ?? "",
       status: city.status,
     });
     setError(null);
@@ -78,10 +80,11 @@ export function EditCityDialog({ city, onClose, onSuccess }: EditCityDialogProps
       cityName: values.cityName.trim(),
       zoneId: Number(values.zoneId),
       shortForm: values.shortForm.trim().toUpperCase(),
+      province: values.province.trim(),
       status: values.status.trim(),
     };
 
-    if (!payload.cityName || !payload.shortForm || !payload.status) {
+    if (!payload.cityName || !payload.shortForm || !payload.province || !payload.status) {
       setError("Please fill in all required fields.");
       setSubmitting(false);
       return;

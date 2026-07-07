@@ -16,5 +16,6 @@ export async function getAllServices(): Promise<Service[]> {
     return response;
   }
 
-  return Array.isArray(response.data) ? response.data : [];
+  const data = response.data ?? (response as { Data?: Service[] }).Data;
+  return Array.isArray(data) ? data : [];
 }

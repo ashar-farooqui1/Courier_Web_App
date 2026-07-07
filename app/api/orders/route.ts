@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createOrder, getOrders } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
-import {
+import { parseApiErrorMessage } from '@/lib/api/errors';import {
   readAppRequestContext,
   resolveOrdersClientId,
   resolveWriteClientId,
@@ -60,14 +60,13 @@ export async function GET(request: Request) {
     return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {
-      const details = error.body as { message?: string } | undefined;
       return NextResponse.json(
-        { message: details?.message ?? error.message, details: error.body },
+        { message: parseApiErrorMessage(error.body, error.message), details: error.body },
         { status: error.status }
       );
     }
     const message = error instanceof Error ? error.message : 'Failed to fetch orders';
-    return NextResponse.json({ message }, { status: 500 });
+    return NextResponse.json({ message: parseApiErrorMessage(message, message) }, { status: 500 });
   }
 }
 
@@ -109,7 +108,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Please select a pickup location' }, { status: 400 });
     }
 
-    if (serviceId < 1 || originCityId < 1) {
+    if (serviceId < 1) {
+      return NextResponse.json({ message: 'Please select a service' }, { status: 400 });
+    }
+
+    if (originCityId < 1) {
       return NextResponse.json(
         { message: 'Pickup location details are incomplete. Reselect pickup location.' },
         { status: 400 }

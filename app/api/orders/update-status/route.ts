@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { updateOrderStatus } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
-import type { OrderStatus } from '@/lib/types/order';
+import { isOrderStatusApiValue } from '@/lib/orders/order-status-options';
 
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get('Authorization');
@@ -18,9 +18,10 @@ function readOrderIds(value: unknown): number[] {
     .filter((entry) => Number.isInteger(entry) && entry > 0);
 }
 
-function readStatus(value: unknown): OrderStatus | null {
-  if (value === 'Draft' || value === 'Finalize') return value;
-  return null;
+function readStatus(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const status = value.trim();
+  return isOrderStatusApiValue(status) ? status : null;
 }
 
 /** Proxies PUT /api/Order/UpdateOrderStatus */

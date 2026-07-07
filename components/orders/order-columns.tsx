@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { formatOrderStatusLabel } from "@/lib/orders/order-status-options";
 import type { ClientOrder } from "@/lib/types/order";
 
 export function formatOrderDate(value: string): string {
@@ -45,8 +46,8 @@ export const ORDER_COLUMNS: {
   {
     label: "Status",
     render: (order) => {
-      const status = order.status || "—";
-      const isFinalized = status.toLowerCase() === "finalize";
+      const status = formatOrderStatusLabel(order.status);
+      const isFinalized = order.status?.toLowerCase() === "finalize";
       return (
         <span
           className={cn(

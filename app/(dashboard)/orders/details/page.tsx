@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAuthSession } from "@/hooks/useAuthRole";
-import { isClientRole } from "@/lib/auth/role";
+import { isAdminRole, isClientRole } from "@/lib/auth/role";
 import ClientOrdersView from "@/components/orders/ClientOrdersView";
 import AdminOrdersView from "@/components/orders/AdminOrdersView";
 
@@ -17,9 +17,17 @@ export default function OrderDetailsPage() {
     );
   }
 
+  if (isAdminRole(role)) {
+    return <AdminOrdersView />;
+  }
+
   if (isClientRole(role)) {
     return <ClientOrdersView />;
   }
 
-  return <AdminOrdersView />;
+  return (
+    <div className="flex items-center justify-center py-24">
+      <p className="text-sm text-slate-400">Unable to load orders for this account.</p>
+    </div>
+  );
 }

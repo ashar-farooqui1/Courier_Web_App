@@ -37,11 +37,18 @@ export interface CreateOrderApiResponse {
   data?: unknown;
 }
 
-export type OrderStatus = "Draft" | "Finalize";
+export type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
+export {
+  ORDER_STATUS_OPTIONS,
+  formatOrderStatusLabel,
+  getOrderStatusLabel,
+} from "@/lib/orders/order-status-options";
+
+import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 
 export interface UpdateOrderStatusPayload {
   orderIds: number[];
-  status: OrderStatus;
+  status: OrderStatusApiValue;
 }
 
 export interface UpdateOrderStatusApiResponse {
@@ -79,6 +86,8 @@ export interface BulkUploadShipmentPreview {
   quantity: number | string;
   weight: number | string;
   amount: number | string;
+  locationId: number | string;
+  serviceId: number | string;
   service: string;
   replacementId: string;
 }

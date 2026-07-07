@@ -3,8 +3,10 @@
 import React, { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AppSidebar from "@/components/SidebarClient";
-import { User, Maximize2, MapPin } from "lucide-react";
+import { AdminProfileMenu } from "@/components/admin/AdminProfileMenu";
+import { MapPin, User } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuthRole";
+import { isAdminRole } from "@/lib/auth/role";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -36,6 +38,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     username ||
     (role === "super-admin" ? "Super Admin" : role === "rider" ? "Rider" : role);
 
+  const headerCity = "Karachi";
+  const profileCity = "Lahore";
+
   return (
     <div className="flex min-h-screen bg-[#f4f7fa]">
       <AppSidebar />
@@ -45,24 +50,25 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-1.5 rounded-md flex items-center gap-2">
               <MapPin size={14} className="text-white" />
-              <span className="text-xs font-bold uppercase tracking-wider">Karachi</span>
+              <span className="text-xs font-bold uppercase tracking-wider">{headerCity}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
-            <button className="text-white/80 hover:text-white transition-colors">
-              <Maximize2 size={18} />
-            </button>
+          {isAdminRole(role) ? (
+            <AdminProfileMenu displayName={displayName} city={profileCity} />
+          ) : (
             <div className="flex items-center gap-3 pl-4 border-l border-white/20">
               <div className="text-right">
-                <p className="text-[11px] font-bold leading-none uppercase tracking-tighter">{displayName}</p>
+                <p className="text-[11px] font-bold leading-none uppercase tracking-tighter">
+                  {displayName}
+                </p>
                 <p className="text-[9px] text-white/70 font-medium">Available</p>
               </div>
               <div className="w-8 h-8 rounded-full bg-white/20 border border-white/30 flex items-center justify-center overflow-hidden">
                 <User size={20} className="text-white" />
               </div>
             </div>
-          </div>
+          )}
         </header>
 
         <main className="flex-1 p-6 overflow-y-auto">{children}</main>

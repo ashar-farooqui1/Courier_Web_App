@@ -19,10 +19,18 @@ export async function POST(request: Request) {
 
     const cityName = String(body.cityName ?? "").trim();
     const shortForm = String(body.shortForm ?? "").trim();
+    const province = String(body.province ?? "").trim();
     const status = String(body.status ?? "").trim();
     const zoneId = Number(body.zoneId);
 
-    if (!cityName || !shortForm || !status || !Number.isFinite(zoneId) || zoneId <= 0) {
+    if (
+      !cityName ||
+      !shortForm ||
+      !province ||
+      !status ||
+      !Number.isFinite(zoneId) ||
+      zoneId <= 0
+    ) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
@@ -30,6 +38,7 @@ export async function POST(request: Request) {
       cityName,
       zoneId,
       shortForm,
+      province,
       status,
     });
 

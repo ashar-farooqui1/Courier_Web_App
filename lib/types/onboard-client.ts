@@ -47,6 +47,23 @@ export interface ServiceChargeConfig {
   zoneCharges: ZoneChargeConfig[];
 }
 
+export interface BankDetailsValues {
+  bankName: string;
+  accountTitle: string;
+  branchName: string;
+  iban: string;
+  accountNumber: string;
+  bankCity: string;
+}
+
+export interface OnboardDeliverySettingsPayload {
+  clientId: number;
+  isFixedFuelSurcharge: boolean;
+  isFlexibleFuelSurcharge: boolean;
+  isReturnCharges: boolean;
+  fuelSurchargeValue: number;
+}
+
 export interface OnboardClientRequest {
   client: {
     status: string;
@@ -64,18 +81,11 @@ export interface OnboardClientRequest {
     services: string;
     roleId: number;
     createdByAdminId: number;
-    deliverySettings: {
-      clientId: number;
-      isPerKg: boolean;
-      isMonthlyInvoicing: boolean;
-      isFixedFuelSurcharge: boolean;
-      isFlexibleFuelSurcharge: boolean;
-      isReturnCharges: boolean;
-      fuelSurchargeValue: number;
-    };
+    deliverySettings: OnboardDeliverySettingsPayload;
   };
   pickupLocation: {
     clientId: number;
+    brandName: string;
     contactPerson: string;
     contactPhone: string;
     locationName: string;
@@ -84,6 +94,7 @@ export interface OnboardClientRequest {
     cityId: number;
     isDefault: boolean;
   };
+  bankDetails: BankDetailsValues;
   deliveryCharge: Array<{
     clientId: number;
     serviceId: number;
@@ -98,6 +109,29 @@ export interface OnboardClientResponse {
   clientId?: number;
   data?: { clientId?: number };
 }
+
+export interface ClientDocumentFiles {
+  logo: File | null;
+  cnicFront: File | null;
+  cnicBack: File | null;
+  blankCheque: File | null;
+}
+
+export const defaultClientDocumentFiles: ClientDocumentFiles = {
+  logo: null,
+  cnicFront: null,
+  cnicBack: null,
+  blankCheque: null,
+};
+
+export const defaultBankDetailsValues: BankDetailsValues = {
+  bankName: "",
+  accountTitle: "",
+  branchName: "",
+  iban: "",
+  accountNumber: "",
+  bankCity: "",
+};
 
 export const defaultOnboardClientInfoValues: OnboardClientInfoValues = {
   clientName: "",

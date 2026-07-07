@@ -1,5 +1,10 @@
-/** Backend expects an empty `test` column before `Location_id` (column position). */
-export const BACKEND_BULK_UPLOAD_PLACEHOLDER_COLUMN = "test";
+import {
+  ORDER_IMPORT_DATA_HEADERS,
+  ORDER_IMPORT_PLACEHOLDER_COLUMN,
+  ORDER_IMPORT_TEMPLATE_HEADERS,
+} from "@/lib/orders/order-import-template";
+
+export const BACKEND_BULK_UPLOAD_PLACEHOLDER_COLUMN = ORDER_IMPORT_PLACEHOLDER_COLUMN;
 
 function normalizeHeader(value: string): string {
   return String(value)
@@ -17,29 +22,49 @@ function isTestHeader(header: string): boolean {
   return normalizeHeader(header) === "test";
 }
 
-function isLocationIdHeader(header: string): boolean {
-  const compact = normalizeHeader(header).replace(/\s+/g, "");
-  return compact === "locationid" || compact === "location_id";
+function compactHeader(value: string): string {
+  return normalizeHeader(value).replace(/\s+/g, "");
 }
 
-function insertTestColumnBeforeLocation(rows: unknown[][]): unknown[][] {
+function matchesCanonicalHeader(rawHeader: string, canonical: string): boolean {
+  if (isTestHeader(rawHeader) && canonical === ORDER_IMPORT_PLACEHOLDER_COLUMN) return true;
+  if (isTestHeader(rawHeader)) return false;
+  return compactHeader(rawHeader) === compactHeader(canonical);
+}
+
+function findSourceHeaderIndex(headers: string[], canonical: string): number {
+  return headers.findIndex((header) => matchesCanonicalHeader(header, canonical));
+}
+
+function rowHasData(row: unknown[]): boolean {
+  return row.some((cell) => String(cell ?? "").trim() !== "");
+}
+
+function readCell(row: unknown[], headers: string[], canonical: string): unknown {
+  const index = findSourceHeaderIndex(headers, canonical);
+  if (index === -1) return "";
+  return row[index] ?? "";
+}
+
+function rebuildBulkUploadRows(rows: unknown[][]): unknown[][] {
   if (rows.length === 0) return rows;
 
-  const headers = rows[0].map((cell) => String(cell ?? "").trim());
-  if (headers.some(isTestHeader)) return rows;
+  const sourceHeaders = rows[0].map((cell) => String(cell ?? "").trim());
+  const dataRows = rows.slice(1).filter(rowHasData);
+  const outputHeaders = [...ORDER_IMPORT_TEMPLATE_HEADERS];
 
-  const locationIndex = headers.findIndex(isLocationIdHeader);
-  if (locationIndex === -1) return rows;
+  const outputRows = dataRows.map((row) =>
+    outputHeaders.map((header) => {
+      if (header === ORDER_IMPORT_PLACEHOLDER_COLUMN) return "";
+      return readCell(row, sourceHeaders, header);
+    })
+  );
 
-  return rows.map((row, rowIndex) => {
-    const next = [...row];
-    next.splice(locationIndex, 0, rowIndex === 0 ? BACKEND_BULK_UPLOAD_PLACEHOLDER_COLUMN : "");
-    return next;
-  });
+  return [outputHeaders, ...outputRows];
 }
 
 function normalizeSheetRows(rows: unknown[][]): unknown[][] {
-  return insertTestColumnBeforeLocation(rows);
+  return rebuildBulkUploadRows(rows);
 }
 
 async function normalizeExcelBuffer(buffer: Buffer): Promise<Buffer> {
@@ -111,7 +136,7 @@ function normalizeCsvBuffer(buffer: Buffer): Buffer {
   return Buffer.from(output, "utf-8");
 }
 
-/** Inserts the backend-required placeholder column before upload. */
+/** Rebuilds the import file into the 12-column order expected by the backend. */
 export async function normalizeBulkUploadFileBuffer(
   buffer: Buffer,
   fileName: string
