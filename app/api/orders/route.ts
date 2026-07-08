@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { createOrder, getOrders } from '@/lib/api/order';
+import { createOrder, getOrders, getOrdersByClient } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';import {
   readAppRequestContext,
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
+import { isClientRole } from '@/lib/auth/role';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -56,7 +57,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const orders = await getOrders(token, scoped.clientId);
+    const orders = isClientRole(ctx.role)
+      ? await getOrdersByClient(scoped.clientId as number, token)
+      : await getOrders(token, scoped.clientId);
     return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {

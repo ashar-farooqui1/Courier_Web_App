@@ -34,8 +34,12 @@ export const API_ROUTES = {
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
   createOrder: "/api/Order/CreateOrder",
   orders: "/api/Order/GetOrders",
+  /** Admin: all orders, optionally filtered by clientId. */
   ordersByClient: (clientId: number | string) =>
     `/api/Order/GetOrders?clientId=${clientId}`,
+  /** Client: only this client's own orders. */
+  ordersForClient: (clientId: number | string) =>
+    `/api/Order/GetOrdersByClient?clientId=${clientId}`,
   updateOrderStatus: "/api/Order/UpdateOrderStatus",
   bulkUploadOrders: "/api/Order/BulkUpload",
   generateAwb: "/api/Order/generate-awb",

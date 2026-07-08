@@ -289,17 +289,17 @@ async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientO
   }
 }
 
-/** GET /api/Order/GetOrders (optional ?clientId=) */
+/** GET /api/Order/GetOrders (optional ?clientId=) — admin view */
 export async function getOrders(token?: string, clientId?: number): Promise<ClientOrder[]> {
   return fetchOrdersFromApi(buildOrdersUrl(clientId), token);
 }
 
-/** GET /api/Order/GetOrders?clientId={clientId} */
+/** GET /api/Order/GetOrdersByClient?clientId={clientId} — client's own orders */
 export async function getOrdersByClient(
   clientId: number,
   token?: string
 ): Promise<ClientOrder[]> {
-  return getOrders(token, clientId);
+  return fetchOrdersFromApi(API_ROUTES.ordersForClient(clientId), token);
 }
 
 /** PUT /api/Order/UpdateOrderStatus */

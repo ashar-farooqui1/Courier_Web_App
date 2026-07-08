@@ -121,7 +121,7 @@ const LoginForm = () => {
 
       <div className="w-full md:w-[45%] p-8 md:p-14 flex flex-col justify-center bg-white">
         <div className="mb-10">
-          <AppLogo className="items-start mb-8 scale-110 origin-left" />
+          <AppLogo className="justify-center mb-8 scale-110" />
           <h2 className="text-3xl font-extrabold text-primary mb-2 tracking-tight">Login Portal</h2>
           <p className="text-slate-500 text-sm">Welcome back! Access your management dashboard.</p>
         </div>
