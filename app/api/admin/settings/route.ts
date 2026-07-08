@@ -35,6 +35,13 @@ export async function PUT(request: Request) {
       strn: String(body.strn ?? "").trim(),
       fuelFactor: Number(body.fuelFactor) || 0,
       petrolCurrentPrice: Number(body.petrolCurrentPrice) || 0,
+      petrolBasePrice: Number(body.petrolBasePrice) || 0,
+      capitalGSTPercentage: Number(body.capitalGSTPercentage) || 0,
+      ajkgstPercentage: Number(body.ajkgstPercentage) || 0,
+      kpkgstPercentage: Number(body.kpkgstPercentage) || 0,
+      balochistanGSTPercentage: Number(body.balochistanGSTPercentage) || 0,
+      punjabGSTPercentage: Number(body.punjabGSTPercentage) || 0,
+      sindhGSTPercentage: Number(body.sindhGSTPercentage) || 0,
     });
 
     return NextResponse.json({ message });

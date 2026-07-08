@@ -110,10 +110,13 @@ const ClientSidebar = () => {
         isHovered ? "w-64" : "w-16"
       )}
     >
-      <div className="h-16 flex items-center px-4 overflow-hidden border-b border-slate-50">
-        <div className={cn("transition-all duration-300", isHovered ? "scale-90" : "scale-75 -ml-1")}>
-          <AppLogo showText={isHovered} />
-        </div>
+      <div
+        className={cn(
+          "flex items-center justify-center px-3 overflow-hidden border-b border-slate-50 transition-all duration-300",
+          isHovered ? "h-24" : "h-16"
+        )}
+      >
+        <AppLogo showText={isHovered} />
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4 custom-scrollbar">

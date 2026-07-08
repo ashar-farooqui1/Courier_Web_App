@@ -465,8 +465,8 @@ export function AddClientOrderDialog({
     locationsError;
 
   const clientLabel = (client: Client) =>
-    client.clientName?.trim() ||
     client.brandName?.trim() ||
+    client.clientName?.trim() ||
     client.clientCode ||
     `Client #${client.clientId}`;
 

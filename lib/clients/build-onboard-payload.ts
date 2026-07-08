@@ -62,6 +62,8 @@ export function buildOnboardClientPayload(
       pocNumber: info.pocNumber.trim(),
       contactNumber: info.contactNumber.trim(),
       clientEmail: info.clientEmail.trim(),
+      cnicNumber: info.cnicNumber.trim(),
+      ntn: info.ntn.trim(),
       clientBillingAddress: info.clientAddress.trim(),
       clientPickupAddress: info.pickupAddress.trim() || info.clientAddress.trim(),
       baseTown: info.clientArea.trim(),

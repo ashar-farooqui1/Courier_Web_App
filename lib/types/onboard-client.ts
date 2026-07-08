@@ -9,6 +9,8 @@ export interface OnboardClientInfoValues {
   pocNumber: string;
   contactNumber: string;
   clientEmail: string;
+  cnicNumber: string;
+  ntn: string;
   clientAddress: string;
   clientArea: string;
   cityId: string;
@@ -81,6 +83,8 @@ export interface OnboardClientRequest {
     services: string;
     roleId: number;
     createdByAdminId: number;
+    cnicNumber: string;
+    ntn: string;
     deliverySettings: OnboardDeliverySettingsPayload;
   };
   pickupLocation: {
@@ -139,6 +143,8 @@ export const defaultOnboardClientInfoValues: OnboardClientInfoValues = {
   pocNumber: "",
   contactNumber: "",
   clientEmail: "",
+  cnicNumber: "",
+  ntn: "",
   clientAddress: "",
   clientArea: "",
   cityId: "",

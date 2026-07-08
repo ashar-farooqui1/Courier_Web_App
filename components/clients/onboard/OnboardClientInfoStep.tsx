@@ -90,6 +90,28 @@ export function OnboardClientInfoStep({
           </div>
 
           <div className="space-y-1">
+            <label className={dialogLabelClass}>CNIC Number</label>
+            <input
+              type="text"
+              value={values.cnicNumber}
+              onChange={(e) => onChange("cnicNumber", e.target.value)}
+              placeholder="CNIC Number"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className={dialogLabelClass}>NTN</label>
+            <input
+              type="text"
+              value={values.ntn}
+              onChange={(e) => onChange("ntn", e.target.value)}
+              placeholder="NTN"
+              className={dialogInputClass}
+            />
+          </div>
+
+          <div className="space-y-1">
             <label className={dialogLabelClass}>Client Address</label>
             <input
               type="text"

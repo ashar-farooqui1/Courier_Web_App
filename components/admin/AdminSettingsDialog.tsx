@@ -170,6 +170,76 @@ export function AdminSettingsDialog({ isOpen, onClose }: AdminSettingsDialogProp
                   className={dialogInputClass}
                 />
               </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>Petrol Base Price</label>
+                <input
+                  type="text"
+                  value={values.petrolBasePrice}
+                  onChange={(e) => setField("petrolBasePrice", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>Capital GST %</label>
+                <input
+                  type="text"
+                  value={values.capitalGSTPercentage}
+                  onChange={(e) => setField("capitalGSTPercentage", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>AJK GST %</label>
+                <input
+                  type="text"
+                  value={values.ajkgstPercentage}
+                  onChange={(e) => setField("ajkgstPercentage", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>KPK GST %</label>
+                <input
+                  type="text"
+                  value={values.kpkgstPercentage}
+                  onChange={(e) => setField("kpkgstPercentage", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>Balochistan GST %</label>
+                <input
+                  type="text"
+                  value={values.balochistanGSTPercentage}
+                  onChange={(e) => setField("balochistanGSTPercentage", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>Punjab GST %</label>
+                <input
+                  type="text"
+                  value={values.punjabGSTPercentage}
+                  onChange={(e) => setField("punjabGSTPercentage", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className={dialogLabelClass}>Sindh GST %</label>
+                <input
+                  type="text"
+                  value={values.sindhGSTPercentage}
+                  onChange={(e) => setField("sindhGSTPercentage", e.target.value)}
+                  className={dialogInputClass}
+                />
+              </div>
             </div>
           )}
         </DialogBody>

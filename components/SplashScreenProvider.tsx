@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import AppLogo from "@/components/AppLogo";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 export default function SplashScreenProvider({ children }: { children: React.ReactNode }) {
@@ -33,7 +33,14 @@ export default function SplashScreenProvider({ children }: { children: React.Rea
             "transition-all duration-500 transform",
             loading ? "scale-110 opacity-100" : "scale-90 opacity-0"
           )}>
-            <AppLogo className="scale-150" />
+            <Image
+              src="/stallionex-logo.jpeg"
+              alt="Stallionex Courier"
+              width={1536}
+              height={1024}
+              priority
+              className="w-64 h-auto md:w-80"
+            />
           </div>
         </div>
       )}
