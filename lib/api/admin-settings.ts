@@ -21,9 +21,12 @@ function unwrapAdminSettings(
     return response;
   }
 
-  const data = response.data ?? response.Data;
-  if (data && typeof data === "object" && "settingId" in data) {
-    return data;
+  if ("data" in response || "Data" in response) {
+    const envelope = response as AdminSettingsApiResponse;
+    const data = envelope.data ?? envelope.Data;
+    if (data && typeof data === "object" && "settingId" in data) {
+      return data;
+    }
   }
 
   throw new ApiError("Admin settings not found", 404, response);
