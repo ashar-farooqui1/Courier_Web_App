@@ -108,18 +108,43 @@ const ModalInput = ({ label, placeholder, type = "text", required = false }: any
   </div>
 );
 
-const OrderFilter = ({ label, placeholder, type = "text" }: any) => (
+const OrderFilter = ({
+  label,
+  placeholder,
+  type = "text",
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  placeholder?: string;
+  type?: string;
+  value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  options?: string[];
+}) => (
   <div className="space-y-1">
     <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
     <div className="relative">
       {type === "select" ? (
-        <select className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20">
+        <select
+          value={value ?? ""}
+          onChange={onChange}
+          className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20"
+        >
           <option value="">{placeholder}</option>
+          {options?.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
         </select>
       ) : (
         <input
           type={type}
           placeholder={placeholder}
+          value={value ?? ""}
+          onChange={onChange}
           className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary/20 placeholder:text-slate-300"
         />
       )}
@@ -146,6 +171,19 @@ export default function AdminOrdersView() {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
+  const emptyOrderFilters = {
+    awbId: "",
+    referenceId: "",
+    dateTo: "",
+    city: "",
+    assignDateFrom: "",
+    assignDateTo: "",
+    rider: "",
+    trackingNumbers: "",
+    rollcartNumber: "",
+  };
+  const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);
@@ -233,31 +271,113 @@ export default function AdminOrdersView() {
     loadOrders();
   }, [loadOrders]);
 
+  const clientLabel = (client: Client) =>
+    client.brandName?.trim() ||
+    client.clientName?.trim() ||
+    client.clientCode ||
+    `Client #${client.clientId}`;
+
+  const selectedClient = useMemo(
+    () => clients.find((client) => String(client.clientId) === selectedClientId),
+    [clients, selectedClientId]
+  );
+
+  const cityOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((order) => {
+      if (order.destinationCity) set.add(order.destinationCity);
+      if (order.originCity) set.add(order.originCity);
+    });
+    return Array.from(set).sort();
+  }, [orders]);
+
+  const riderOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((order) => {
+      if (order.riderName) set.add(order.riderName);
+    });
+    return Array.from(set).sort();
+  }, [orders]);
+
+  const updateFilterDraft = (key: keyof typeof emptyOrderFilters, value: string) => {
+    setFilterDraft((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSearch = () => {
+    setAppliedFilters(filterDraft);
+  };
+
+  const handleClearFilters = () => {
+    setFilterDraft(emptyOrderFilters);
+    setAppliedFilters(emptyOrderFilters);
+    setSelectedClientId("");
+  };
+
+  const isWithinDateRange = (orderDate: string, from: string, to: string) => {
+    if (!from && !to) return true;
+    const parsed = new Date(orderDate);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const day = parsed.toISOString().slice(0, 10);
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    return true;
+  };
+
   const filteredOrders = useMemo(() => {
     const query = tableSearch.trim().toLowerCase();
-    if (!query) return orders;
+    const awbQuery = appliedFilters.awbId.trim().toLowerCase();
+    const trackingQuery = appliedFilters.trackingNumbers.trim().toLowerCase();
+    const referenceQuery = appliedFilters.referenceId.trim().toLowerCase();
+    const selectedClientName = selectedClient ? clientLabel(selectedClient).trim().toLowerCase() : "";
 
     return orders.filter((order) => {
-      const haystack = [
-        order.awbNo,
-        order.clientName,
-        order.customerName,
-        order.customerPhone,
-        order.customerReference,
-        order.productName,
-        order.serviceName,
-        order.status,
-        order.riderName,
-        order.destinationCity,
-        order.originCity,
-        order.warehouse,
-      ]
-        .join(" ")
-        .toLowerCase();
+      // Safety net: the API's ?clientId= filter isn't always honored by the
+      // backend, so also match on client name client-side.
+      if (selectedClientName) {
+        const orderClientName = order.clientName?.trim().toLowerCase() ?? "";
+        if (orderClientName !== selectedClientName && !orderClientName.includes(selectedClientName)) {
+          return false;
+        }
+      }
 
-      return haystack.includes(query);
+      if (query) {
+        const haystack = [
+          order.awbNo,
+          order.clientName,
+          order.customerName,
+          order.customerPhone,
+          order.customerReference,
+          order.productName,
+          order.serviceName,
+          order.status,
+          order.riderName,
+          order.destinationCity,
+          order.originCity,
+          order.warehouse,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(query)) return false;
+      }
+
+      if (awbQuery && !order.awbNo?.toLowerCase().includes(awbQuery)) return false;
+      if (trackingQuery && !order.awbNo?.toLowerCase().includes(trackingQuery)) return false;
+      if (referenceQuery && !order.customerReference?.toLowerCase().includes(referenceQuery)) return false;
+      if (
+        appliedFilters.city &&
+        order.destinationCity !== appliedFilters.city &&
+        order.originCity !== appliedFilters.city
+      )
+        return false;
+      if (appliedFilters.rider && order.riderName !== appliedFilters.rider) return false;
+      if (!isWithinDateRange(order.orderDate, "", appliedFilters.dateTo)) return false;
+      if (!isWithinDateRange(order.orderDate, appliedFilters.assignDateFrom, appliedFilters.assignDateTo))
+        return false;
+
+      return true;
     });
-  }, [orders, tableSearch]);
+  }, [orders, tableSearch, appliedFilters, selectedClient]);
 
   const visibleOrderIds = useMemo(
     () => filteredOrders.map((order) => order.orderId),
@@ -424,12 +544,6 @@ export default function AdminOrdersView() {
     setSuccessMessage(message);
     loadOrders();
   };
-
-  const clientLabel = (client: Client) =>
-    client.clientName?.trim() ||
-    client.brandName?.trim() ||
-    client.clientCode ||
-    `Client #${client.clientId}`;
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
@@ -640,9 +754,25 @@ export default function AdminOrdersView() {
       </Modal>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4">
-          <OrderFilter label="AWB ID" placeholder="Enter AWB ID" />
-          <OrderFilter label="Reference ID" placeholder="Enter Reference ID" />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSearch();
+          }}
+          className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4"
+        >
+          <OrderFilter
+            label="AWB ID"
+            placeholder="Enter AWB ID"
+            value={filterDraft.awbId}
+            onChange={(e) => updateFilterDraft("awbId", e.target.value)}
+          />
+          <OrderFilter
+            label="Reference ID"
+            placeholder="Enter Reference ID"
+            value={filterDraft.referenceId}
+            onChange={(e) => updateFilterDraft("referenceId", e.target.value)}
+          />
           <div className="space-y-1">
             <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
               Client Name
@@ -669,21 +799,89 @@ export default function AdminOrdersView() {
               />
             </div>
           </div>
-          <OrderFilter label="Date (To)" placeholder="" type="date" />
-          <OrderFilter label="City" placeholder="Select City" type="select" />
-          <OrderFilter label="Assign Date (From)" placeholder="" type="date" />
-          <OrderFilter label="Assign Date (To)" placeholder="" type="date" />
-          <OrderFilter label="Rider" placeholder="Select Rider" type="select" />
-          <div className="md:col-span-3 pt-2">
-            <Button className="w-full h-10 font-bold bg-primary text-white shadow-md">Search</Button>
+          <OrderFilter
+            label="Date (To)"
+            placeholder=""
+            type="date"
+            value={filterDraft.dateTo}
+            onChange={(e) => updateFilterDraft("dateTo", e.target.value)}
+          />
+          <OrderFilter
+            label="City"
+            placeholder="Select City"
+            type="select"
+            options={cityOptions}
+            value={filterDraft.city}
+            onChange={(e) => updateFilterDraft("city", e.target.value)}
+          />
+          <OrderFilter
+            label="Assign Date (From)"
+            placeholder=""
+            type="date"
+            value={filterDraft.assignDateFrom}
+            onChange={(e) => updateFilterDraft("assignDateFrom", e.target.value)}
+          />
+          <OrderFilter
+            label="Assign Date (To)"
+            placeholder=""
+            type="date"
+            value={filterDraft.assignDateTo}
+            onChange={(e) => updateFilterDraft("assignDateTo", e.target.value)}
+          />
+          <OrderFilter
+            label="Rider"
+            placeholder="Select Rider"
+            type="select"
+            options={riderOptions}
+            value={filterDraft.rider}
+            onChange={(e) => updateFilterDraft("rider", e.target.value)}
+          />
+          <div className="md:col-span-3 pt-2 flex gap-3">
+            <Button type="submit" className="flex-1 h-10 font-bold bg-primary text-white shadow-md">
+              Search
+            </Button>
+            <Button
+              type="button"
+              onClick={handleClearFilters}
+              className="h-10 px-6 font-bold bg-white text-primary border border-primary hover:bg-slate-50 shadow-sm"
+            >
+              Clear
+            </Button>
           </div>
-        </div>
+        </form>
 
-        <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4">
-          <OrderFilter label="Tracking Numbers" placeholder="Enter Tracking Numbers" />
-          <OrderFilter label="Rollcart Number" placeholder="Enter Rollcart Number" />
-          <Button className="w-full h-10 font-bold bg-primary text-white shadow-md">Search</Button>
-        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSearch();
+          }}
+          className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4"
+        >
+          <OrderFilter
+            label="Tracking Numbers"
+            placeholder="Enter Tracking Numbers"
+            value={filterDraft.trackingNumbers}
+            onChange={(e) => updateFilterDraft("trackingNumbers", e.target.value)}
+          />
+          <OrderFilter
+            label="Rollcart Number"
+            placeholder="Enter Rollcart Number"
+            value={filterDraft.rollcartNumber}
+            onChange={(e) => updateFilterDraft("rollcartNumber", e.target.value)}
+          />
+          <div className="flex gap-3">
+            <Button type="submit" className="flex-1 h-10 font-bold bg-primary text-white shadow-md">
+              Search
+            </Button>
+            <Button
+              type="button"
+              onClick={handleClearFilters}
+              className="h-10 px-6 font-bold bg-white text-primary border border-primary hover:bg-slate-50 shadow-sm"
+            >
+              Clear
+            </Button>
+          </div>
+        </form>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
