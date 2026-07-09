@@ -5,6 +5,8 @@ import { dialogInputClass, dialogLabelClass } from "@/components/ui/dialog-style
 import type { CreateCityPayload } from "@/lib/types/city";
 import type { Zone } from "@/lib/types/zone";
 
+const PROVINCE_OPTIONS = ["Sindh", "Punjab", "Balochistan", "KPK"];
+
 interface CityFormFieldsProps {
   values: CreateCityPayload;
   zones: Zone[];
@@ -53,14 +55,21 @@ export function CityFormFields({
 
       <div className="space-y-1.5">
         <label className={dialogLabelClass}>Province *</label>
-        <input
-          type="text"
+        <select
           value={values.province}
           onChange={(e) => onChange("province", e.target.value)}
-          placeholder="Enter province"
           className={dialogInputClass}
           required
-        />
+        >
+          <option value="" disabled>
+            Select Province
+          </option>
+          {PROVINCE_OPTIONS.map((province) => (
+            <option key={province} value={province}>
+              {province}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-1.5">

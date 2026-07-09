@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
@@ -95,6 +96,7 @@ function ReferenceDropdown({
 }
 
 export function OrderImportView() {
+  const router = useRouter();
   const { user, token, ready, clientId, role } = useAuthSession();
   const clientLabel =
     [user?.displayName?.trim(), clientId > 0 ? String(clientId) : ""]
@@ -313,6 +315,7 @@ export function OrderImportView() {
 
       setFinalized(true);
       setUploadMessage(payload?.message ?? "Import finalized successfully.");
+      router.push("/orders/details");
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Finalize import failed");
     } finally {
