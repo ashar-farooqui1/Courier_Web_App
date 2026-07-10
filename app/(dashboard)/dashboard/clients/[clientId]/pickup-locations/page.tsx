@@ -12,6 +12,7 @@ import type { PickupLocation } from "@/lib/types/pickup-location";
 
 const TABLE_HEADERS = [
   "Action",
+  "Brand Name",
   "Location Name",
   "Contact Person",
   "City",
@@ -333,6 +334,7 @@ export default function ClientPickupLocationsPage() {
                         </button>
                       </div>
                     </td>
+                    <td className="p-4 font-bold align-top">{location.brandName || "—"}</td>
                     <td className="p-4 font-bold">{location.locationName}</td>
                     <td className="p-4">{location.contactPerson || "—"}</td>
                     <td className="p-4">{location.cityName ?? location.cityId}</td>

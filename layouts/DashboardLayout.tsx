@@ -1,12 +1,15 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppSidebar from "@/components/SidebarClient";
 import { AdminProfileMenu } from "@/components/admin/AdminProfileMenu";
+import { DefaultWarehouseDialog } from "@/components/admin/DefaultWarehouseDialog";
 import { MapPin, User } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { isAdminRole } from "@/lib/auth/role";
+import { saveDefaultWarehouse } from "@/lib/auth/warehouse";
+import type { Warehouse } from "@/lib/types/warehouse";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -15,12 +18,24 @@ interface DashboardLayoutProps {
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const router = useRouter();
   const { role, user, username, ready } = useAuthSession();
+  const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
 
   useEffect(() => {
     if (ready && !role) {
       router.replace("/");
     }
   }, [ready, role, router]);
+
+  useEffect(() => {
+    if (ready && isAdminRole(role)) {
+      setShowWarehouseDialog(true);
+    }
+  }, [ready, role]);
+
+  const handleWarehouseConfirm = (warehouse: Warehouse) => {
+    saveDefaultWarehouse({ warehouseId: warehouse.warehouseId, name: warehouse.name });
+    setShowWarehouseDialog(false);
+  };
 
   if (!ready) {
     return (
@@ -43,6 +58,11 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   return (
     <div className="flex min-h-screen bg-[#f4f7fa]">
+      <DefaultWarehouseDialog
+        isOpen={showWarehouseDialog}
+        adminName={displayName}
+        onConfirm={handleWarehouseConfirm}
+      />
       <AppSidebar />
 
       <div className="flex-1 flex flex-col min-w-0">

@@ -66,4 +66,6 @@ export const API_ROUTES = {
 
   riders: "/api/Rider",
   riderById: (riderId: number | string) => `/api/Rider/${riderId}`,
+
+  warehouses: "/api/Warehouse/GetWarehouses",
 } as const;

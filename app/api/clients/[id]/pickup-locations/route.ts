@@ -61,6 +61,7 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ message: 'Invalid request body' }, { status: 400 });
     }
 
+    const brandName = readString(body.brandName);
     const contactPerson = readString(body.contactPerson);
     const contactPhone = readString(body.contactPhone);
     const locationName = readString(body.locationName);
@@ -69,7 +70,7 @@ export async function POST(request: Request, context: RouteContext) {
     const cityId = Number(body.cityId);
     const isDefault = readBoolean(body.isDefault);
 
-    if (!contactPerson || !contactPhone || !locationName || !area || !address) {
+    if (!brandName || !contactPerson || !contactPhone || !locationName || !area || !address) {
       return NextResponse.json({ message: 'Please fill in all required fields' }, { status: 400 });
     }
 
@@ -79,6 +80,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     const message = await addPickupLocation({
       clientId,
+      brandName,
       contactPerson,
       contactPhone,
       locationName,

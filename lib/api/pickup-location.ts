@@ -109,6 +109,7 @@ export function normalizePickupLocation(raw: unknown): PickupLocation | null {
   return {
     pickupLocationId,
     clientId: pickNumber(record, ['clientId', 'ClientId']),
+    brandName: pickString(record, ['brandName', 'BrandName']) || undefined,
     contactPerson: pickString(record, ['contactPerson', 'ContactPerson']),
     contactPhone: pickString(record, ['contactPhone', 'ContactPhone']),
     locationName: pickString(record, ['locationName', 'LocationName']),
@@ -185,6 +186,7 @@ export async function addPickupLocation(
 function buildPickupLocationBody(payload: CreatePickupLocationPayload) {
   return {
     clientId: payload.clientId,
+    brandName: payload.brandName,
     contactPerson: payload.contactPerson,
     contactPhone: payload.contactPhone,
     locationName: payload.locationName,

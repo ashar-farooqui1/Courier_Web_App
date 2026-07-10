@@ -21,6 +21,7 @@ function readFormPayload(form: HTMLFormElement, clientId: number): CreatePickupL
 
   return {
     clientId,
+    brandName: String(formData.get("brandName") ?? "").trim(),
     contactPerson: String(formData.get("contactPerson") ?? "").trim(),
     contactPhone: String(formData.get("contactPhone") ?? "").trim(),
     locationName: String(formData.get("locationName") ?? "").trim(),
@@ -33,6 +34,7 @@ function readFormPayload(form: HTMLFormElement, clientId: number): CreatePickupL
 
 function locationToFormValues(location: PickupLocation) {
   return {
+    brandName: location.brandName ?? "",
     contactPerson: location.contactPerson ?? "",
     contactPhone: location.contactPhone ?? "",
     locationName: location.locationName ?? "",
@@ -112,6 +114,7 @@ export function EditPickupLocationDialog({
     const payload = readFormPayload(form, clientId);
 
     if (
+      !payload.brandName ||
       !payload.contactPerson ||
       !payload.contactPhone ||
       !payload.locationName ||
@@ -202,6 +205,15 @@ export function EditPickupLocationDialog({
           <DialogBody>
             {error && <DialogError message={error} />}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <input
+                type="text"
+                name="brandName"
+                value={values.brandName}
+                onChange={(e) => setField("brandName", e.target.value)}
+                placeholder="Brand Name"
+                className={inputClass}
+                required
+              />
               <input
                 type="text"
                 name="contactPerson"

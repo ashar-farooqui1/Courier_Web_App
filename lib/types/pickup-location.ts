@@ -1,6 +1,7 @@
 export interface PickupLocation {
   pickupLocationId: number;
   clientId: number;
+  brandName?: string;
   contactPerson: string;
   contactPhone: string;
   locationName: string;
@@ -13,6 +14,7 @@ export interface PickupLocation {
 
 export interface CreatePickupLocationPayload {
   clientId: number;
+  brandName: string;
   contactPerson: string;
   contactPhone: string;
   locationName: string;
