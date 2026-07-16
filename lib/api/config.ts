@@ -58,6 +58,7 @@ export const API_ROUTES = {
   bulkUploadCities: "/api/Admin/BulkUploadCities",
   zones: "/api/Admin/GetAllZones",
   services: "/api/Admin/GellAllService",
+  couriers: "/api/Admin/GetAllCouriers",
 
   roles: "/api/Auth/GetRoles",
   accountLogin: "/api/Account/login",

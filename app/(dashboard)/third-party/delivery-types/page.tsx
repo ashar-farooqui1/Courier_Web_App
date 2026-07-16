@@ -1,77 +1,135 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { ArrowRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatStatusLabel } from '@/lib/format';
+import type { Client } from '@/lib/types/client';
 
-interface DeliveryType {
-  id: string;
-  name: string;
-  lcs: boolean;
-  mp: boolean;
-}
+export default function DeliveryTypesClientsPage() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
-const Toggle = ({ active, onToggle }: { active: boolean; onToggle: () => void }) => (
-  <div 
-    onClick={onToggle}
-    className={cn(
-      "w-10 h-5 rounded-full relative transition-colors cursor-pointer",
-      active ? "bg-primary" : "bg-slate-200"
-    )}
-  >
-    <div className={cn(
-      "absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all",
-      active ? "right-0.5" : "left-0.5"
-    )}></div>
-  </div>
-);
+  const fetchClients = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/clients');
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(payload?.message ?? `Failed to load clients (${response.status})`);
+      }
+      const data = (await response.json()) as Client[];
+      setClients(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setClients([]);
+      setError(err instanceof Error ? err.message : 'Failed to load clients');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-export default function DeliveryTypesPage() {
-  const [types, setTypes] = useState<DeliveryType[]>([
-    { id: '1', name: 'COD within the city', lcs: false, mp: false },
-    { id: '2', name: 'COD Outstation', lcs: false, mp: false },
-    { id: '3', name: 'Same Zone', lcs: false, mp: false },
-    { id: '4', name: 'Other', lcs: false, mp: false },
-    { id: '5', name: 'LTL', lcs: false, mp: false },
-    { id: '6', name: 'FTL', lcs: false, mp: false },
-    { id: '7', name: 'COD Outstation Tier A', lcs: false, mp: false },
-    { id: '8', name: 'COD Outstation Tier ISB', lcs: false, mp: false },
-    { id: '9', name: 'COD Outstation Tier KHI', lcs: false, mp: false },
-    { id: '10', name: 'COD Outstation Tier RWP', lcs: false, mp: false },
-    { id: '11', name: 'COD Outstation Tier LHE', lcs: false, mp: false },
-    { id: '12', name: 'Main Cities Service', lcs: false, mp: false },
-  ]);
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
 
-  const toggleType = (id: string, field: 'lcs' | 'mp') => {
-    setTypes(prev => prev.map(t => t.id === id ? { ...t, [field]: !t[field] } : t));
-  };
+  const filteredClients = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return clients;
+    return clients.filter((client) =>
+      [client.clientName, client.brandName, client.clientCode, String(client.clientId)]
+        .filter(Boolean)
+        .some((value) => value.toLowerCase().includes(query))
+    );
+  }, [clients, search]);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-in fade-in duration-500">
-      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Enable Delivery Type For Third Party Auto Order Creation</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Select Client</h1>
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search clients…"
+            className="h-9 w-64 pl-9 pr-3 bg-white border border-slate-200 rounded text-xs font-bold text-slate-600 focus:outline-none"
+          />
+        </div>
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        {error && (
+          <div className="mx-6 mt-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={fetchClients}
+              className="shrink-0 h-8 px-4 bg-red-600 text-white text-[10px] font-bold rounded uppercase hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/30">
-              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Delivery Type</th>
-              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">LCS</th>
-              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">M&P</th>
+              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client ID</th>
+              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Brand Name</th>
+              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Client Name</th>
+              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+              <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {types.map((type) => (
-              <tr key={type.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="p-4 text-[11px] font-bold text-slate-500 uppercase">{type.name}</td>
-                <td className="p-4 flex justify-center">
-                  <Toggle active={type.lcs} onToggle={() => toggleType(type.id, 'lcs')} />
-                </td>
-                <td className="p-4">
-                  <div className="flex justify-center">
-                    <Toggle active={type.mp} onToggle={() => toggleType(type.id, 'mp')} />
-                  </div>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="p-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  Loading clients…
                 </td>
               </tr>
-            ))}
+            ) : filteredClients.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  {error ? 'No clients to display' : 'No clients found'}
+                </td>
+              </tr>
+            ) : (
+              filteredClients.map((client) => (
+                <tr key={client.clientId} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="p-4 text-[11px] font-bold text-slate-500">
+                    {client.clientCode}
+                    <span className="block text-[9px] text-slate-400 font-medium">#{client.clientId}</span>
+                  </td>
+                  <td className="p-4 text-[11px] font-bold text-slate-600">{client.brandName}</td>
+                  <td className="p-4 text-[11px] text-slate-600">{client.clientName}</td>
+                  <td className="p-4">
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 text-white text-[9px] font-bold rounded uppercase',
+                        client.status?.toLowerCase() === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
+                      )}
+                    >
+                      {formatStatusLabel(client.status)}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right">
+                    <Link
+                      href={`/third-party/delivery-types/${client.clientId}`}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 active:scale-95 transition-all"
+                    >
+                      Select
+                      <ArrowRight size={12} />
+                    </Link>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
