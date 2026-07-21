@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { formatOrderStatusLabel } from "@/lib/orders/order-status-options";
+import { resolveAssetUrl } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
 
 export function formatOrderDate(value: string): string {
@@ -64,4 +65,24 @@ export const ORDER_COLUMNS: {
   { label: "Destination City", render: (order) => order.destinationCity || "—" },
   { label: "Origin City", render: (order) => order.originCity || "—" },
   { label: "Warehouse", render: (order) => order.warehouse || "—" },
+  {
+    label: "Courier",
+    render: (order) => {
+      const logoUrl = resolveAssetUrl(order.courierLogoUrl);
+      if (!logoUrl) return "—";
+      return (
+        <img
+          src={logoUrl}
+          alt={order.courierName || "Courier"}
+          title={order.courierName || undefined}
+          className="h-10 w-10 rounded object-contain bg-white border border-slate-100"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+      );
+    },
+  },
+  { label: "Courier Tracking No", render: (order) => order.courierTrackingNo || "—" },
+  { label: "Courier Tracking Status", render: (order) => order.courierTrackingStatus || "—" },
 ];

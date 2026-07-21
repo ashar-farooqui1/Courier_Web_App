@@ -209,6 +209,12 @@ export function normalizeClientOrder(raw: unknown): ClientOrder | null {
     destinationCity: pickString(record, ['destinationCity', 'DestinationCity']),
     originCity: pickString(record, ['originCity', 'OriginCity']),
     warehouse: pickString(record, ['warehouse', 'Warehouse']),
+    courierId: pickNumber(record, ['courierId', 'CourierId']),
+    courierTrackingNo: pickString(record, ['courierTrackingNo', 'CourierTrackingNo']),
+    courierName: pickString(record, ['courierName', 'CourierName']),
+    courierLogoUrl: pickString(record, ['courierLogoUrl', 'CourierLogoUrl']),
+    dispatchStatus: pickString(record, ['dispatchStatus', 'DispatchStatus']),
+    courierTrackingStatus: '',
   };
 }
 
@@ -373,6 +379,72 @@ async function parseUpdateOrderStatusResponse(
     if (text === 'true') return 'Order status updated successfully';
     return text || 'Order status updated successfully';
   }
+}
+
+async function parseDeleteOrdersResponse(
+  response: Response,
+  fallbackError: string
+): Promise<string> {
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `${fallbackError} (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) return 'Order(s) deleted successfully';
+
+  try {
+    const payload = JSON.parse(text) as { success?: boolean; message?: string; data?: unknown };
+
+    if (payload.success === false) {
+      throw new ApiError(
+        parseApiErrorMessage(payload, fallbackError),
+        response.status,
+        payload
+      );
+    }
+
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message;
+    }
+
+    return 'Order(s) deleted successfully';
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (text === 'true') return 'Order(s) deleted successfully';
+    return text || 'Order(s) deleted successfully';
+  }
+}
+
+/** POST /api/Order/DeleteOrders */
+export async function deleteOrders(orderIds: number[], token?: string): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.deleteOrders}`, {
+    method: 'DELETE',
+    headers,
+    body: JSON.stringify({ orderIds }),
+    cache: 'no-store',
+  });
+
+  return parseDeleteOrdersResponse(response, 'Failed to delete orders');
 }
 
 function pickValue(record: Record<string, unknown>, keys: string[]): string | number {

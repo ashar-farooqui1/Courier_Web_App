@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { Client } from '@/lib/types/client';
 import type { Zone } from '@/lib/types/zone';
 import type { Courier } from '@/lib/types/courier';
+import type { ZoneCourierMapping } from '@/lib/types/zone-courier';
 
 interface DeliveryType {
   id: string;
@@ -20,10 +21,32 @@ function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
-function resizePriorities(priorities: Array<number | null>, size: number): Array<number | null> {
-  if (priorities.length === size) return priorities;
-  if (priorities.length > size) return priorities.slice(0, size);
-  return [...priorities, ...Array(size - priorities.length).fill(null)];
+async function fetchJson<T>(url: string, fallbackErrorLabel: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? `Failed to load ${fallbackErrorLabel} (${response.status})`);
+  }
+  return (await response.json()) as T;
+}
+
+/** Builds each zone's priority slots (sized to courier count) from previously saved priorities. */
+function buildDeliveryTypes(
+  zones: Zone[],
+  couriers: Courier[],
+  savedZoneCouriers: ZoneCourierMapping[]
+): DeliveryType[] {
+  return zones.map((zone) => {
+    const priorities: Array<number | null> = Array(couriers.length).fill(null);
+    const mapping = savedZoneCouriers.find((z) => z.zoneId === zone.zoneId);
+    mapping?.couriers.forEach(({ courierId, priority }) => {
+      const slotIndex = priority - 1;
+      if (slotIndex >= 0 && slotIndex < priorities.length) {
+        priorities[slotIndex] = courierId;
+      }
+    });
+    return { id: String(zone.zoneId), name: zone.zoneName, priorities };
+  });
 }
 
 export default function DeliveryTypesPage() {
@@ -34,12 +57,14 @@ export default function DeliveryTypesPage() {
   const [loadingClient, setLoadingClient] = useState(true);
 
   const [types, setTypes] = useState<DeliveryType[]>([]);
-  const [loadingTypes, setLoadingTypes] = useState(true);
-  const [typesError, setTypesError] = useState<string | null>(null);
-
   const [couriers, setCouriers] = useState<Courier[]>([]);
-  const [loadingCouriers, setLoadingCouriers] = useState(true);
+  const [loadingBoard, setLoadingBoard] = useState(true);
+  const [typesError, setTypesError] = useState<string | null>(null);
   const [couriersError, setCouriersError] = useState<string | null>(null);
+
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const loadClient = useCallback(async () => {
     if (!Number.isInteger(clientId) || clientId < 1) {
@@ -57,66 +82,54 @@ export default function DeliveryTypesPage() {
     }
   }, [clientId]);
 
-  const loadZones = useCallback(async () => {
-    setLoadingTypes(true);
+  // Fetches zones, couriers, and previously saved priorities together and derives the
+  // final table state in one pass — avoids a merge-then-patch pipeline where one fetch
+  // resolving after another (e.g. under React Strict Mode's double-invoked effects)
+  // could overwrite already-merged priorities with a blank state.
+  const loadBoard = useCallback(async () => {
+    setLoadingBoard(true);
     setTypesError(null);
-    try {
-      const response = await fetch('/api/zones');
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? `Failed to load zones (${response.status})`);
-      }
-      const zones = (await response.json()) as Zone[];
-      setTypes(
-        (Array.isArray(zones) ? zones : []).map((zone) => ({
-          id: String(zone.zoneId),
-          name: zone.zoneName,
-          priorities: [],
-        }))
-      );
-    } catch (err) {
-      setTypes([]);
-      setTypesError(err instanceof Error ? err.message : 'Failed to load zones');
-    } finally {
-      setLoadingTypes(false);
-    }
-  }, []);
-
-  const loadCouriers = useCallback(async () => {
-    setLoadingCouriers(true);
     setCouriersError(null);
-    try {
-      const response = await fetch('/api/couriers');
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? `Failed to load couriers (${response.status})`);
-      }
-      const data = (await response.json()) as Courier[];
-      setCouriers(Array.isArray(data) ? data : []);
-    } catch (err) {
-      setCouriers([]);
-      setCouriersError(err instanceof Error ? err.message : 'Failed to load couriers');
-    } finally {
-      setLoadingCouriers(false);
+
+    const savedPromise: Promise<ZoneCourierMapping[]> =
+      Number.isInteger(clientId) && clientId > 0
+        ? fetch(`/api/clients/${clientId}/zone-couriers`)
+            .then((r) => (r.ok ? (r.json() as Promise<ZoneCourierMapping[]>) : []))
+            .catch(() => [])
+        : Promise.resolve([]);
+
+    const [zonesResult, couriersResult, savedResult] = await Promise.allSettled([
+      fetchJson<Zone[]>('/api/zones', 'zones'),
+      fetchJson<Courier[]>('/api/couriers', 'couriers'),
+      savedPromise,
+    ]);
+
+    const zones = zonesResult.status === 'fulfilled' && Array.isArray(zonesResult.value) ? zonesResult.value : [];
+    const couriersList =
+      couriersResult.status === 'fulfilled' && Array.isArray(couriersResult.value) ? couriersResult.value : [];
+    const saved = savedResult.status === 'fulfilled' && Array.isArray(savedResult.value) ? savedResult.value : [];
+
+    if (zonesResult.status === 'rejected') {
+      setTypesError(zonesResult.reason instanceof Error ? zonesResult.reason.message : 'Failed to load zones');
     }
-  }, []);
+    if (couriersResult.status === 'rejected') {
+      setCouriersError(
+        couriersResult.reason instanceof Error ? couriersResult.reason.message : 'Failed to load couriers'
+      );
+    }
+
+    setCouriers(couriersList);
+    setTypes(buildDeliveryTypes(zones, couriersList, saved));
+    setLoadingBoard(false);
+  }, [clientId]);
 
   useEffect(() => {
     loadClient();
   }, [loadClient]);
 
   useEffect(() => {
-    loadZones();
-  }, [loadZones]);
-
-  useEffect(() => {
-    loadCouriers();
-  }, [loadCouriers]);
-
-  // Keep each zone's priority slots in sync with the number of couriers available.
-  useEffect(() => {
-    setTypes(prev => prev.map(t => ({ ...t, priorities: resizePriorities(t.priorities, couriers.length) })));
-  }, [couriers.length]);
+    loadBoard();
+  }, [loadBoard]);
 
   const setPriority = (id: string, slotIndex: number, courierId: number | null) => {
     setTypes(prev =>
@@ -127,6 +140,46 @@ export default function DeliveryTypesPage() {
         return { ...t, priorities: next };
       })
     );
+  };
+
+  const handleSave = async () => {
+    if (!Number.isInteger(clientId) || clientId < 1) {
+      setSaveError('Client session not found.');
+      return;
+    }
+
+    const zones = types.map(t => ({
+      zoneId: Number(t.id),
+      couriers: t.priorities
+        .map((courierId, slotIndex) =>
+          courierId ? { courierId, priority: slotIndex + 1 } : null
+        )
+        .filter((c): c is { courierId: number; priority: number } => c !== null),
+    }));
+
+    setSaving(true);
+    setSaveError(null);
+    setSaveMessage(null);
+
+    try {
+      const response = await fetch(`/api/clients/${clientId}/zone-couriers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zones }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to save priorities (${response.status})`);
+      }
+
+      setSaveMessage(payload?.message ?? 'Courier priorities saved successfully.');
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save priorities');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const clientLabel =
@@ -158,11 +211,23 @@ export default function DeliveryTypesPage() {
           <span>{couriersError}</span>
           <button
             type="button"
-            onClick={loadCouriers}
+            onClick={loadBoard}
             className="shrink-0 h-8 px-4 bg-red-600 text-white text-[10px] font-bold rounded uppercase hover:bg-red-700 transition-colors"
           >
             Retry
           </button>
+        </div>
+      )}
+
+      {(saveError || saveMessage) && (
+        <div
+          className={
+            saveError
+              ? 'p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium'
+              : 'p-4 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-medium'
+          }
+        >
+          {saveError ?? saveMessage}
         </div>
       )}
 
@@ -171,7 +236,7 @@ export default function DeliveryTypesPage() {
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/30">
               <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Zone</th>
-              {loadingCouriers ? (
+              {loadingBoard ? (
                 <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Loading…</th>
               ) : (
                 Array.from({ length: priorityColumnCount }).map((_, index) => (
@@ -183,7 +248,7 @@ export default function DeliveryTypesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {loadingTypes || loadingCouriers ? (
+            {loadingBoard ? (
               <tr>
                 <td colSpan={columnCount} className="p-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
                   Loading…
@@ -242,6 +307,17 @@ export default function DeliveryTypesPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || loadingBoard || types.length === 0}
+          className="h-10 px-6 bg-primary text-white text-xs font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? 'Saving…' : 'Save Priorities'}
+        </button>
       </div>
     </div>
   );

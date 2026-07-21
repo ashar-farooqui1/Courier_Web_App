@@ -28,8 +28,10 @@ import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
+import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import type { Client } from "@/lib/types/client";
 import type { ClientOrder } from "@/lib/types/order";
+import type { MnpTrackingDetail } from "@/lib/types/mnp";
 
 const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-4xl" }: any) => {
   if (!isOpen) return null;
@@ -188,6 +190,7 @@ export default function AdminOrdersView() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
+  const [deletingOrders, setDeletingOrders] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleModal = (key: string, val: boolean) => {
@@ -252,7 +255,31 @@ export default function AdminOrdersView() {
         );
       }
 
-      setOrders(unwrapOrdersList(payload));
+      const fetchedOrders = unwrapOrdersList(payload);
+
+      if (!fetchedOrders.some(isMnpOrder)) {
+        setOrders(fetchedOrders);
+      } else {
+        try {
+          const mnpTrackingUrl =
+            Number.isInteger(clientId) && clientId > 0
+              ? `/api/orders/mnp-tracking?clientId=${clientId}`
+              : "/api/orders/mnp-tracking";
+          const mnpResponse = await fetch(mnpTrackingUrl, {
+            headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
+          });
+          const mnpPayload = (await mnpResponse.json().catch(() => null)) as {
+            tracking_Details?: MnpTrackingDetail[];
+          } | null;
+          const statusMap = mnpResponse.ok
+            ? buildMnpStatusMap(mnpPayload?.tracking_Details ?? [])
+            : new Map<string, string>();
+          setOrders(applyMnpTrackingStatus(fetchedOrders, statusMap));
+        } catch {
+          // M&P lookup failed — fall back to the backend's dispatch status.
+          setOrders(fetchedOrders);
+        }
+      }
     } catch (err) {
       setOrders([]);
       setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
@@ -545,6 +572,60 @@ export default function AdminOrdersView() {
     loadOrders();
   };
 
+  const handleOpenDeleteModal = () => {
+    if (selectedOrderIds.size === 0) {
+      setActionError("Please select at least one order to delete.");
+      return;
+    }
+    toggleModal("delete", true);
+  };
+
+  const handleDeleteOrders = async () => {
+    if (!token) {
+      setActionError("Authentication required. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to delete.");
+      return;
+    }
+
+    setDeletingOrders(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/delete", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to delete orders (${response.status})`);
+      }
+
+      setSelectedOrderIds(new Set());
+      toggleModal("delete", false);
+      setSuccessMessage(
+        payload?.message ??
+          (orderIds.length === 1 ? "Order deleted successfully." : `${orderIds.length} orders deleted successfully.`)
+      );
+      await loadOrders();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to delete orders");
+    } finally {
+      setDeletingOrders(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -552,7 +633,12 @@ export default function AdminOrdersView() {
 
         <div className="flex flex-wrap gap-2 justify-end">
           <ActionButton icon={Import} label="Import" onClick={() => toggleModal("import", true)} />
-          <ActionButton icon={Trash2} label="Delete" onClick={() => toggleModal("delete", true)} />
+          <ActionButton
+            icon={Trash2}
+            label="Delete"
+            onClick={handleOpenDeleteModal}
+            disabled={selectedOrderIds.size === 0}
+          />
           <ActionButton icon={UserPlus} label="Assign Rider" />
           <ActionButton icon={FileBox} label="Rollcart" />
           <ActionButton icon={Scale} label="Re-Weight" />
@@ -650,14 +736,26 @@ export default function AdminOrdersView() {
           </div>
           <div className="space-y-2">
             <h4 className="text-lg font-bold text-slate-700">Are you sure?</h4>
-            <p className="text-sm text-slate-400">Do you really want to delete these orders? This process cannot be undone.</p>
+            <p className="text-sm text-slate-400">
+              Do you really want to delete{" "}
+              {selectedOrderIds.size === 1 ? "this order" : `these ${selectedOrderIds.size} orders`}? This process
+              cannot be undone.
+            </p>
           </div>
           <div className="flex gap-3 pt-2">
-            <button onClick={() => toggleModal("delete", false)} className="flex-1 h-11 border border-slate-200 text-slate-400 text-xs font-bold rounded-lg uppercase hover:bg-slate-50 transition-all">
+            <button
+              onClick={() => toggleModal("delete", false)}
+              disabled={deletingOrders}
+              className="flex-1 h-11 border border-slate-200 text-slate-400 text-xs font-bold rounded-lg uppercase hover:bg-slate-50 transition-all disabled:opacity-50"
+            >
               Cancel
             </button>
-            <button className="flex-1 h-11 bg-red-500 text-white text-xs font-bold rounded-lg uppercase shadow-lg shadow-red-500/20 active:scale-95 transition-all">
-              Delete
+            <button
+              onClick={handleDeleteOrders}
+              disabled={deletingOrders}
+              className="flex-1 h-11 bg-red-500 text-white text-xs font-bold rounded-lg uppercase shadow-lg shadow-red-500/20 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {deletingOrders ? "Deleting…" : "Delete"}
             </button>
           </div>
         </div>

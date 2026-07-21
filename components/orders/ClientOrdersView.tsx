@@ -22,6 +22,8 @@ import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
+import type { MnpTrackingDetail } from "@/lib/types/mnp";
+import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 
 const Modal = ({
@@ -220,7 +222,27 @@ export default function ClientOrdersView() {
         );
       }
 
-      setOrders(unwrapOrdersList(payload));
+      const fetchedOrders = unwrapOrdersList(payload);
+
+      if (!fetchedOrders.some(isMnpOrder)) {
+        setOrders(fetchedOrders);
+      } else {
+        try {
+          const mnpResponse = await fetch(`/api/orders/mnp-tracking?clientId=${clientId}`, {
+            headers: buildAppAuthHeaders(token, role, clientId),
+          });
+          const mnpPayload = (await mnpResponse.json().catch(() => null)) as {
+            tracking_Details?: MnpTrackingDetail[];
+          } | null;
+          const statusMap = mnpResponse.ok
+            ? buildMnpStatusMap(mnpPayload?.tracking_Details ?? [])
+            : new Map<string, string>();
+          setOrders(applyMnpTrackingStatus(fetchedOrders, statusMap));
+        } catch {
+          // M&P lookup failed — fall back to the backend's dispatch status.
+          setOrders(fetchedOrders);
+        }
+      }
     } catch (err) {
       setOrders([]);
       setOrdersError(err instanceof Error ? err.message : "Failed to load orders");

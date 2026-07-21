@@ -1,10 +1,6 @@
 import {
-  ORDER_IMPORT_DATA_HEADERS,
-  ORDER_IMPORT_PLACEHOLDER_COLUMN,
   ORDER_IMPORT_TEMPLATE_HEADERS,
 } from "@/lib/orders/order-import-template";
-
-export const BACKEND_BULK_UPLOAD_PLACEHOLDER_COLUMN = ORDER_IMPORT_PLACEHOLDER_COLUMN;
 
 function normalizeHeader(value: string): string {
   return String(value)
@@ -18,17 +14,11 @@ function normalizeHeader(value: string): string {
     .trim();
 }
 
-function isTestHeader(header: string): boolean {
-  return normalizeHeader(header) === "test";
-}
-
 function compactHeader(value: string): string {
   return normalizeHeader(value).replace(/\s+/g, "");
 }
 
 function matchesCanonicalHeader(rawHeader: string, canonical: string): boolean {
-  if (isTestHeader(rawHeader) && canonical === ORDER_IMPORT_PLACEHOLDER_COLUMN) return true;
-  if (isTestHeader(rawHeader)) return false;
   return compactHeader(rawHeader) === compactHeader(canonical);
 }
 
@@ -54,10 +44,7 @@ function rebuildBulkUploadRows(rows: unknown[][]): unknown[][] {
   const outputHeaders = [...ORDER_IMPORT_TEMPLATE_HEADERS];
 
   const outputRows = dataRows.map((row) =>
-    outputHeaders.map((header) => {
-      if (header === ORDER_IMPORT_PLACEHOLDER_COLUMN) return "";
-      return readCell(row, sourceHeaders, header);
-    })
+    outputHeaders.map((header) => readCell(row, sourceHeaders, header))
   );
 
   return [outputHeaders, ...outputRows];

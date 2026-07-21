@@ -74,6 +74,13 @@ export interface ClientOrder {
   destinationCity: string;
   originCity: string;
   warehouse: string;
+  courierId: number;
+  courierTrackingNo: string;
+  courierName: string;
+  courierLogoUrl: string;
+  dispatchStatus: string;
+  /** Live status from the third-party courier's tracking API (e.g. M&P). Not from the backend. */
+  courierTrackingStatus: string;
 }
 
 export interface BulkUploadShipmentPreview {

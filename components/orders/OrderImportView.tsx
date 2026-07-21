@@ -355,8 +355,8 @@ export function OrderImportView() {
             <span className="font-bold">Step 1.</span> Download the excel model below and fill in the
             data. You can change the order of the columns, but you must keep their names as they are.
             At least the <span className="font-bold">Pieces</span> column needs to contain the number
-            of pieces (for example 1). Column <span className="font-bold">test</span> (column 10) must
-            stay <span className="font-bold">empty</span>. Use valid{" "}
+            of pieces (for example 1). The <span className="font-bold">Customer Comment</span> column
+            (column 10) is optional and can be left <span className="font-bold">empty</span>. Use valid{" "}
             <span className="font-bold">Locationid</span> and <span className="font-bold">ServiceId</span>{" "}
             from the reference lists below. Download the template — do not remove or rename columns.
           </p>

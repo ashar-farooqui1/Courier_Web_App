@@ -29,6 +29,9 @@ export const API_ROUTES = {
     `/api/Client/GetDeliverySettings?clientId=${clientId}`,
   saveDeliveryCharges: '/api/Client/SaveDeliveryCharges',
   saveDeliverySettings: '/api/Client/SaveDeliverySettings',
+  saveZoneCouriers: "/api/Client/SaveZoneCouriers",
+  clientZoneCouriers: (clientId: number | string) =>
+    `/api/Client/GetClientZoneCouriers?clientId=${clientId}`,
 
   orderPickupLocation: (pickupLocationId: number | string) =>
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
@@ -43,6 +46,7 @@ export const API_ROUTES = {
   updateOrderStatus: "/api/Order/UpdateOrderStatus",
   bulkUploadOrders: "/api/Order/BulkUpload",
   generateAwb: "/api/Order/generate-awb",
+  deleteOrders: "/api/Order/DeleteOrders",
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",

@@ -1,37 +1,33 @@
-/** Empty column required by backend at position 10 (leave blank in every row). */
-export const ORDER_IMPORT_PLACEHOLDER_COLUMN = "test";
-
 /**
- * Column order must match backend Excel parsing (row.Cell(1) … row.Cell(12)).
+ * Column order must match backend Excel parsing (row.Cell(1) … row.Cell(12)):
+ * ConsigneeName, ConsigneeAddress, ConsigneeContactNo, ProductName, COD, Pieces,
+ * Weight, Destination, CustomerReference, CustomerComment, LocationId, ServiceId.
  * Keep names exactly as written — including "Customer Refrences" and lowercase "weight".
  */
 export const ORDER_IMPORT_TEMPLATE_HEADERS = [
   "Consignee Name",
-  "Consignee Contact No",
   "Consignee Address",
+  "Consignee Contact No",
   "Product Name",
   "COD",
   "Pieces",
   "weight",
   "Destination",
   "Customer Refrences",
-  ORDER_IMPORT_PLACEHOLDER_COLUMN,
+  "Customer Comment",
   "Locationid",
   "ServiceId",
 ] as const;
 
-/** Shipment fields only (excludes test / Locationid / ServiceId). */
+/** Shipment fields only (excludes Locationid / ServiceId). */
 export const ORDER_IMPORT_DATA_HEADERS = ORDER_IMPORT_TEMPLATE_HEADERS.filter(
-  (header) =>
-    header !== ORDER_IMPORT_PLACEHOLDER_COLUMN &&
-    header !== "Locationid" &&
-    header !== "ServiceId"
+  (header) => header !== "Locationid" && header !== "ServiceId"
 );
 
 export const ORDER_IMPORT_TEMPLATE_SAMPLE_ROW = [
   "John Doe",
-  "03001234567",
   "House 1, Street 2",
+  "03001234567",
   "Sample Product",
   "500",
   "1",

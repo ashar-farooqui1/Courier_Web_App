@@ -1,3 +1,12 @@
+import { API_BASE_URL } from '@/lib/api/config';
+
+/** Resolves a possibly-relative asset path (e.g. courier logo) against the API host. */
+export function resolveAssetUrl(path: string): string {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+}
+
 /** Formats API ISO date for table display; hides sentinel empty dates. */
 export function formatArrivalAt(value: string): string {
   if (!value || value.startsWith('0001-')) return '—';
