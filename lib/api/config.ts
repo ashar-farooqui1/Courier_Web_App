@@ -47,6 +47,7 @@ export const API_ROUTES = {
   bulkUploadOrders: "/api/Order/BulkUpload",
   generateAwb: "/api/Order/generate-awb",
   deleteOrders: "/api/Order/DeleteOrders",
+  retryDispatch: "/api/Order/RetryDispatch",
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",

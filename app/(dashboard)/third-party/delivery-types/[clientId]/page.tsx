@@ -183,8 +183,8 @@ export default function DeliveryTypesPage() {
   };
 
   const clientLabel =
-    client?.clientName?.trim() ||
     client?.brandName?.trim() ||
+    client?.clientName?.trim() ||
     client?.clientCode ||
     (loadingClient ? 'Loading…' : `#${clientId}`);
 

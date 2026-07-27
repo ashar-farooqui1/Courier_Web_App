@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Import,
@@ -16,6 +17,7 @@ import {
   X,
   AlertCircle,
   RotateCcw,
+  RefreshCw,
   ChevronDown,
   Check,
 } from "lucide-react";
@@ -156,6 +158,7 @@ const OrderFilter = ({
 
 export default function AdminOrdersView() {
   const { token, ready, role, user } = useAuthSession();
+  const router = useRouter();
 
   const [modalStates, setModalStates] = useState({
     import: false,
@@ -167,6 +170,7 @@ export default function AdminOrdersView() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState("");
+  const [importClientId, setImportClientId] = useState("");
   const [loadingClients, setLoadingClients] = useState(false);
   const [clientsError, setClientsError] = useState<string | null>(null);
   const [orders, setOrders] = useState<ClientOrder[]>([]);
@@ -190,6 +194,7 @@ export default function AdminOrdersView() {
   const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
+  const [retryingDispatch, setRetryingDispatch] = useState(false);
   const [deletingOrders, setDeletingOrders] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -567,6 +572,52 @@ export default function AdminOrdersView() {
     }
   };
 
+  const handleRetryDispatch = async () => {
+    if (!token) {
+      setActionError("Authentication required. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to retry dispatch.");
+      return;
+    }
+
+    setRetryingDispatch(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/retry-dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to retry dispatch (${response.status})`);
+      }
+
+      setSuccessMessage(
+        payload?.message ??
+          (orderIds.length === 1
+            ? "Order resubmitted for dispatch."
+            : `${orderIds.length} orders resubmitted for dispatch.`)
+      );
+      await loadOrders();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to retry dispatch");
+    } finally {
+      setRetryingDispatch(false);
+    }
+  };
+
   const handleOrderCreated = (message: string) => {
     setSuccessMessage(message);
     loadOrders();
@@ -632,7 +683,14 @@ export default function AdminOrdersView() {
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</h1>
 
         <div className="flex flex-wrap gap-2 justify-end">
-          <ActionButton icon={Import} label="Import" onClick={() => toggleModal("import", true)} />
+          <ActionButton
+            icon={Import}
+            label="Import"
+            onClick={() => {
+              setImportClientId("");
+              toggleModal("import", true);
+            }}
+          />
           <ActionButton
             icon={Trash2}
             label="Delete"
@@ -648,6 +706,12 @@ export default function AdminOrdersView() {
             label={generatingAwb ? "Generating…" : "AWB Print"}
             onClick={handleAwbPrint}
             disabled={generatingAwb || loadingOrders}
+          />
+          <ActionButton
+            icon={RefreshCw}
+            label={retryingDispatch ? "Retrying…" : "Retry Dispatch"}
+            onClick={handleRetryDispatch}
+            disabled={retryingDispatch || loadingOrders || selectedOrderIds.size === 0}
           />
           <ActionButton icon={Plus} label="Add New" onClick={() => toggleModal("addNew", true)} />
           <ActionButton icon={Archive} label="Trashed" onClick={() => toggleModal("trashed", true)} />
@@ -720,10 +784,44 @@ export default function AdminOrdersView() {
 
       <Modal isOpen={modalStates.import} onClose={() => toggleModal("import", false)} title="Order Import" maxWidth="max-w-6xl">
         <div className="flex items-end gap-6 bg-white p-4 rounded-lg">
-          <div className="flex-1">
-            <ModalInput label="Client" placeholder="Please Select client" type="select" />
+          <div className="flex-1 space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+              Client <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <select
+                value={importClientId}
+                onChange={(e) => setImportClientId(e.target.value)}
+                disabled={loadingClients}
+                className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all appearance-none cursor-pointer"
+              >
+                <option value="">
+                  {loadingClients ? "Loading clients..." : "Please select client"}
+                </option>
+                {clients.map((client) => (
+                  <option key={client.clientId} value={client.clientId}>
+                    {clientLabel(client)}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                size={14}
+              />
+            </div>
           </div>
-          <button className="h-11 px-10 bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all">
+          <button
+            type="button"
+            disabled={!importClientId}
+            onClick={() => {
+              const client = clients.find((c) => String(c.clientId) === importClientId);
+              const params = new URLSearchParams({ clientId: importClientId });
+              if (client) params.set("clientName", clientLabel(client));
+              toggleModal("import", false);
+              router.push(`/orders/import?${params.toString()}`);
+            }}
+            className="h-11 px-10 bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Choose Client
           </button>
         </div>

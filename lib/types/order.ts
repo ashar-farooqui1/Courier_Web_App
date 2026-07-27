@@ -12,6 +12,7 @@ export interface OrderPickupLocationDetails {
 export interface CreateOrderPayload {
   clientId: number;
   pickupLocationId: number;
+  warehouseId: number;
   serviceId: number;
   serviceName: string;
   originAddress: string;

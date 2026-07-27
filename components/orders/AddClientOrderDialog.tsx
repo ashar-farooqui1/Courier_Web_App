@@ -5,6 +5,7 @@ import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { getDefaultWarehouse } from "@/lib/auth/warehouse";
 import type { CreateOrderPayload, OrderPickupLocationDetails } from "@/lib/types/order";
 import type { City } from "@/lib/types/city";
 import type { Client } from "@/lib/types/client";
@@ -99,6 +100,7 @@ export function AddClientOrderDialog({
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [selectedPickupLocationId, setSelectedPickupLocationId] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [defaultWarehouseId, setDefaultWarehouseId] = useState(0);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -289,6 +291,7 @@ export function AddClientOrderDialog({
 
     loadCities();
     loadServices();
+    setDefaultWarehouseId(getDefaultWarehouse()?.warehouseId ?? 0);
     if (isAdmin) {
       loadClients();
     }
@@ -356,6 +359,7 @@ export function AddClientOrderDialog({
     return {
       clientId: effectiveClientId,
       pickupLocationId: pickupDetails.pickupLocationId,
+      warehouseId: defaultWarehouseId,
       serviceId,
       serviceName: selectedService.serviceName,
       originAddress: pickupDetails.originAddress,
@@ -397,6 +401,11 @@ export function AddClientOrderDialog({
 
     if (!selectedServiceId) {
       setSubmitError("Please select a service.");
+      return;
+    }
+
+    if (isAdmin && defaultWarehouseId < 1) {
+      setSubmitError("Default warehouse not set. Please log in again.");
       return;
     }
 
@@ -475,7 +484,7 @@ export function AddClientOrderDialog({
     !loadingDetails &&
     pickupDetails &&
     selectedServiceId &&
-    (!isAdmin || effectiveClientId > 0);
+    (!isAdmin || (effectiveClientId > 0 && defaultWarehouseId > 0));
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">

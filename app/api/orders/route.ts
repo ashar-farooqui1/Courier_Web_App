@@ -6,7 +6,7 @@ import { parseApiErrorMessage } from '@/lib/api/errors';import {
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
-import { isClientRole } from '@/lib/auth/role';
+import { isAdminRole, isClientRole } from '@/lib/auth/role';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -91,6 +91,7 @@ export async function POST(request: Request) {
 
     const requestedClientId = readNumber(body.clientId);
     const pickupLocationId = readNumber(body.pickupLocationId);
+    const warehouseId = readNumber(body.warehouseId);
     const serviceId = readNumber(body.serviceId);
     const originCityId = readNumber(body.originCityId);
     const destinationCityId = readNumber(body.destinationCityId);
@@ -109,6 +110,10 @@ export async function POST(request: Request) {
 
     if (pickupLocationId < 1) {
       return NextResponse.json({ message: 'Please select a pickup location' }, { status: 400 });
+    }
+
+    if (isAdminRole(ctx.role) && warehouseId < 1) {
+      return NextResponse.json({ message: 'Default warehouse not set. Please log in again.' }, { status: 400 });
     }
 
     if (serviceId < 1) {
@@ -136,6 +141,7 @@ export async function POST(request: Request) {
     const payload: CreateOrderPayload = {
       clientId,
       pickupLocationId,
+      warehouseId,
       serviceId,
       serviceName: readString(body.serviceName),
       originAddress: readString(body.originAddress),

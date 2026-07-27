@@ -3,12 +3,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import type { BulkUploadShipmentPreview } from "@/lib/types/order";
-import type { ClientCity } from "@/lib/types/client-city";
 import type { PickupLocation } from "@/lib/types/pickup-location";
 import type { Service } from "@/lib/types/service";
 import { ORDER_IMPORT_TEMPLATE_FILENAME } from "@/lib/orders/order-import-template";
@@ -36,35 +35,39 @@ function formatPreviewCell(value: number | string | undefined | null): string {
 const importButtonClass =
   "inline-flex items-center gap-2 h-9 px-4 bg-primary text-white text-[11px] font-bold rounded hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
+interface ReferenceRow {
+  copyValue: string;
+  columns: string[];
+}
+
 function ReferenceDropdown({
   label,
-  items,
+  rows,
   loading,
   emptyMessage,
 }: {
   label: string;
-  items: string[];
+  rows: ReferenceRow[];
   loading: boolean;
   emptyMessage: string;
 }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+  const handleCopy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedValue(value);
+      setTimeout(() => {
+        setCopiedValue((current) => (current === value ? null : current));
+      }, 1500);
+    } catch {
+      // Clipboard access unavailable — nothing to fall back to.
+    }
+  };
 
   return (
-    <div ref={containerRef} className="relative">
+    <div className="space-y-2">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -74,18 +77,34 @@ function ReferenceDropdown({
         <ChevronDown size={14} className={cn("transition-transform", open && "rotate-180")} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-[220px] max-h-48 overflow-y-auto rounded border border-slate-200 bg-white shadow-lg">
+        <div className="rounded border border-slate-200 divide-y divide-slate-100 overflow-hidden">
           {loading ? (
-            <p className="px-3 py-2 text-xs text-slate-400">Loading…</p>
-          ) : items.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-slate-400">{emptyMessage}</p>
+            <p className="px-3 py-2 text-xs text-slate-400 bg-slate-50/60">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-slate-400 bg-slate-50/60">{emptyMessage}</p>
           ) : (
-            items.map((item) => (
-              <div
-                key={item}
-                className="px-3 py-2 text-xs font-medium text-slate-700 border-b border-slate-50 last:border-0"
-              >
-                {item}
+            rows.map((row, index) => (
+              <div key={`${row.copyValue}-${index}`} className="flex items-stretch bg-slate-50/60">
+                {row.columns.map((column, columnIndex) => (
+                  <div
+                    key={columnIndex}
+                    className="flex-1 min-w-0 px-3 py-2 text-xs font-medium text-slate-600 border-r border-slate-100 last:border-r-0 truncate"
+                  >
+                    {column || "—"}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleCopy(row.copyValue)}
+                  title={`Copy ${row.copyValue}`}
+                  className="shrink-0 w-10 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-100 transition-colors"
+                >
+                  {copiedValue === row.copyValue ? (
+                    <Check size={14} className="text-emerald-500" />
+                  ) : (
+                    <Copy size={14} />
+                  )}
+                </button>
               </div>
             ))
           )}
@@ -95,13 +114,28 @@ function ReferenceDropdown({
   );
 }
 
-export function OrderImportView() {
+interface OrderImportViewProps {
+  variant?: "client" | "admin";
+  adminClientId?: number;
+  adminClientLabel?: string;
+}
+
+export function OrderImportView({
+  variant = "client",
+  adminClientId,
+  adminClientLabel,
+}: OrderImportViewProps = {}) {
   const router = useRouter();
   const { user, token, ready, clientId, role } = useAuthSession();
-  const clientLabel =
-    [user?.displayName?.trim(), clientId > 0 ? String(clientId) : ""]
-      .filter(Boolean)
-      .join(" - ") || "—";
+  const isAdmin = variant === "admin";
+  const effectiveClientId = isAdmin ? (adminClientId ?? 0) : clientId;
+  const clientLabel = isAdmin
+    ? [adminClientLabel?.trim(), effectiveClientId > 0 ? String(effectiveClientId) : ""]
+        .filter(Boolean)
+        .join(" - ") || "—"
+    : [user?.displayName?.trim(), clientId > 0 ? String(clientId) : ""]
+        .filter(Boolean)
+        .join(" - ") || "—";
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewTableRef = useRef<HTMLDivElement>(null);
@@ -115,32 +149,28 @@ export function OrderImportView() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
-  const [cities, setCities] = useState<ClientCity[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [loadingReference, setLoadingReference] = useState(false);
 
   const loadReferenceData = useCallback(async () => {
-    if (!Number.isInteger(clientId) || clientId < 1) return;
+    if (!Number.isInteger(effectiveClientId) || effectiveClientId < 1) return;
 
     setLoadingReference(true);
     try {
-      const [locationsRes, citiesRes, servicesRes] = await Promise.all([
-        fetch(`/api/clients/${clientId}/pickup-locations`),
-        fetch(`/api/clients/${clientId}/cities`),
+      const [locationsRes, servicesRes] = await Promise.all([
+        fetch(`/api/clients/${effectiveClientId}/pickup-locations`),
         fetch("/api/services"),
       ]);
 
       const locationsPayload = (await locationsRes.json().catch(() => null)) as
         | PickupLocation[]
         | null;
-      const citiesPayload = (await citiesRes.json().catch(() => null)) as ClientCity[] | null;
       const servicesPayload = (await servicesRes.json().catch(() => null)) as
         | Service[]
         | { data?: Service[] }
         | null;
 
       setPickupLocations(Array.isArray(locationsPayload) ? locationsPayload : []);
-      setCities(Array.isArray(citiesPayload) ? citiesPayload : []);
       const serviceRows = Array.isArray(servicesPayload)
         ? servicesPayload
         : Array.isArray(servicesPayload?.data)
@@ -149,27 +179,29 @@ export function OrderImportView() {
       setServices(serviceRows);
     } catch {
       setPickupLocations([]);
-      setCities([]);
       setServices([]);
     } finally {
       setLoadingReference(false);
     }
-  }, [clientId]);
+  }, [effectiveClientId]);
 
   useEffect(() => {
     if (ready) loadReferenceData();
   }, [ready, loadReferenceData]);
 
-  const pickupLabels = pickupLocations.map(
-    (location) =>
-      `${location.locationName} (Locationid: ${location.pickupLocationId})${
-        location.isDefault ? " — Default" : ""
-      }`
-  );
-  const cityLabels = cities.map((city) => city.cityName);
-  const serviceLabels = services.map(
-    (service) => `${service.serviceName} (ServiceId: ${service.serviceId})`
-  );
+  const pickupRows: ReferenceRow[] = pickupLocations.map((location) => ({
+    copyValue: String(location.pickupLocationId),
+    columns: [
+      String(location.pickupLocationId),
+      location.cityName ?? "",
+      location.area,
+      location.address,
+    ],
+  }));
+  const serviceRows: ReferenceRow[] = services.map((service) => ({
+    copyValue: String(service.serviceId),
+    columns: [String(service.serviceId), service.serviceName],
+  }));
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -274,8 +306,10 @@ export function OrderImportView() {
       return;
     }
 
-    if (!Number.isInteger(clientId) || clientId < 1) {
-      setUploadError("Client session not found. Please log in again.");
+    if (!Number.isInteger(effectiveClientId) || effectiveClientId < 1) {
+      setUploadError(
+        isAdmin ? "Please select a client first." : "Client session not found. Please log in again."
+      );
       return;
     }
 
@@ -285,12 +319,12 @@ export function OrderImportView() {
 
     try {
       const formData = new FormData();
-      formData.append("ClientId", String(clientId));
+      formData.append("ClientId", String(effectiveClientId));
       formData.append("file", selectedFile);
 
       const response = await fetch("/api/orders/bulk-upload", {
         method: "POST",
-        headers: buildAppAuthHeaders(token, role, clientId),
+        headers: buildAppAuthHeaders(token, role, isAdmin ? (user?.userId ?? 0) : clientId),
         body: formData,
       });
 
@@ -378,24 +412,18 @@ export function OrderImportView() {
 
           <div className="space-y-3">
             <p className="text-sm font-bold text-slate-800">Valid reference values</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-3">
               <ReferenceDropdown
                 label="Services"
-                items={serviceLabels}
+                rows={serviceRows}
                 loading={loadingReference}
                 emptyMessage="No services found"
               />
               <ReferenceDropdown
                 label="Pickup Locations"
-                items={pickupLabels}
+                rows={pickupRows}
                 loading={loadingReference}
                 emptyMessage="No pickup locations found"
-              />
-              <ReferenceDropdown
-                label="Cities"
-                items={cityLabels}
-                loading={loadingReference}
-                emptyMessage="No cities found"
               />
             </div>
           </div>

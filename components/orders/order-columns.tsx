@@ -61,6 +61,34 @@ export const ORDER_COLUMNS: {
       );
     },
   },
+  {
+    label: "Dispatched",
+    render: (order) => {
+      const value = order.dispatchStatus?.trim();
+      if (!value) return "—";
+
+      const normalized = value.toLowerCase();
+      const isFailed = normalized.includes("fail") || normalized.includes("error");
+      const isDispatched =
+        !isFailed &&
+        (normalized.includes("dispatch") || normalized.includes("success") || normalized.includes("sent"));
+
+      return (
+        <span
+          className={cn(
+            "inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase",
+            isFailed
+              ? "bg-red-50 text-red-700"
+              : isDispatched
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-slate-100 text-slate-500"
+          )}
+        >
+          {value}
+        </span>
+      );
+    },
+  },
   { label: "Rider", render: (order) => order.riderName || "—" },
   { label: "Destination City", render: (order) => order.destinationCity || "—" },
   { label: "Origin City", render: (order) => order.originCity || "—" },
