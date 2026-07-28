@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       success: true,
       message: result.message,
       data: result.shipments,
+      stats: result.stats,
     });
   } catch (error) {
     if (error instanceof ApiError) {

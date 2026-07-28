@@ -7,7 +7,7 @@ import { ArrowLeft, Check, ChevronDown, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
-import type { BulkUploadShipmentPreview } from "@/lib/types/order";
+import type { BulkUploadShipmentPreview, BulkUploadStats } from "@/lib/types/order";
 import type { PickupLocation } from "@/lib/types/pickup-location";
 import type { Service } from "@/lib/types/service";
 import type { Warehouse } from "@/lib/types/warehouse";
@@ -148,6 +148,7 @@ export function OrderImportView({
   const [finalizing, setFinalizing] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [finalized, setFinalized] = useState(false);
+  const [finalizeStats, setFinalizeStats] = useState<BulkUploadStats | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
@@ -224,6 +225,7 @@ export function OrderImportView({
     setUploadMessage(null);
     setShipments([]);
     setFinalized(false);
+    setFinalizeStats(null);
   };
 
   const handleDownloadTemplate = async () => {
@@ -343,6 +345,7 @@ export function OrderImportView({
 
       const payload = (await response.json().catch(() => null)) as {
         message?: string;
+        stats?: BulkUploadStats | null;
         details?: {
           data?: { errors?: string[] };
           errors?: string[];
@@ -362,7 +365,7 @@ export function OrderImportView({
 
       setFinalized(true);
       setUploadMessage(payload?.message ?? "Import finalized successfully.");
-      router.push("/orders/details");
+      setFinalizeStats(payload?.stats ?? null);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Finalize import failed");
     } finally {
@@ -506,6 +509,59 @@ export function OrderImportView({
             {shipments.length > 0 ? " — preview table is below" : ""}
           </p>
         </section>
+
+        {finalizeStats && (
+          <section className="space-y-4 border-t border-slate-100 pt-8">
+            <p className="text-sm font-bold text-slate-800">Import Summary</p>
+            <div className="grid grid-cols-3 gap-3 max-w-md">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+                <p className="text-lg font-black text-slate-800">{finalizeStats.totalRows}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Total Rows
+                </p>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center">
+                <p className="text-lg font-black text-emerald-700">{finalizeStats.successRows}</p>
+                <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
+                  Success
+                </p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-center">
+                <p className="text-lg font-black text-red-700">{finalizeStats.failedRows}</p>
+                <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest">
+                  Failed
+                </p>
+              </div>
+            </div>
+
+            {finalizeStats.errors.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-bold text-slate-600">Why rows failed:</p>
+                <ul className="rounded-lg border border-red-100 bg-red-50/60 divide-y divide-red-100">
+                  {Array.from(
+                    finalizeStats.errors.reduce((counts, message) => {
+                      counts.set(message, (counts.get(message) ?? 0) + 1);
+                      return counts;
+                    }, new Map<string, number>())
+                  ).map(([message, count]) => (
+                    <li key={message} className="px-3 py-2 text-xs font-medium text-red-700">
+                      {message}
+                      {count > 1 ? ` (×${count})` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard")}
+              className={importButtonClass}
+            >
+              Go to Dashboard
+            </button>
+          </section>
+        )}
       </div>
 
       <div

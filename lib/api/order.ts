@@ -586,6 +586,28 @@ function pickStatErrors(record: Record<string, unknown>): string[] {
   return raw.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry));
 }
 
+const STAT_FIELD_KEYS = ['totalRows', 'TotalRows', 'successRows', 'SuccessRows', 'failedRows', 'FailedRows'];
+
+function hasStatFields(record: Record<string, unknown>): boolean {
+  return STAT_FIELD_KEYS.some((key) => record[key] != null);
+}
+
+/** Backend sometimes wraps the real stats in nested `data`/`stats` envelopes. */
+function resolveStatsRecord(record: Record<string, unknown>): Record<string, unknown> | null {
+  if (hasStatFields(record)) return record;
+
+  if (record.stats && typeof record.stats === 'object' && !Array.isArray(record.stats)) {
+    const nested = record.stats as Record<string, unknown>;
+    if (hasStatFields(nested)) return nested;
+  }
+
+  if (record.data && typeof record.data === 'object' && !Array.isArray(record.data)) {
+    return resolveStatsRecord(record.data as Record<string, unknown>);
+  }
+
+  return null;
+}
+
 function parseBulkUploadStats(data: unknown): BulkUploadStats | null {
   if (!data) return null;
 
@@ -601,28 +623,14 @@ function parseBulkUploadStats(data: unknown): BulkUploadStats | null {
 
   if (typeof data !== 'object') return null;
 
-  const record = data as Record<string, unknown>;
-  const nested =
-    record.stats && typeof record.stats === 'object' && !Array.isArray(record.stats)
-      ? (record.stats as Record<string, unknown>)
-      : record;
-
-  const totalRows = pickStatNumber(nested, ['totalRows', 'TotalRows']);
-  const successRows = pickStatNumber(nested, ['successRows', 'SuccessRows']);
-  const failedRows = pickStatNumber(nested, ['failedRows', 'FailedRows']);
-  const errors = pickStatErrors(nested);
-
-  const hasStatsField = ['totalRows', 'TotalRows', 'successRows', 'SuccessRows', 'failedRows', 'FailedRows'].some(
-    (key) => nested[key] != null
-  );
-
-  if (!hasStatsField) return null;
+  const nested = resolveStatsRecord(data as Record<string, unknown>);
+  if (!nested) return null;
 
   return {
-    totalRows,
-    successRows,
-    failedRows,
-    errors,
+    totalRows: pickStatNumber(nested, ['totalRows', 'TotalRows']),
+    successRows: pickStatNumber(nested, ['successRows', 'SuccessRows']),
+    failedRows: pickStatNumber(nested, ['failedRows', 'FailedRows']),
+    errors: pickStatErrors(nested),
   };
 }
 
@@ -636,7 +644,12 @@ function formatBulkUploadStatsMessage(stats: BulkUploadStats): string {
   return 'Bulk upload failed. Please check your file and try again.';
 }
 
-function assertBulkUploadSucceeded(payload: BulkUploadApiResponse): BulkUploadStats | null {
+/**
+ * Only rejects when the file itself yielded no rows to process — partial and full
+ * row-level failures are returned as stats so the UI can render a results summary
+ * instead of a blocking error.
+ */
+function resolveBulkUploadStats(payload: BulkUploadApiResponse): BulkUploadStats | null {
   const stats = parseBulkUploadStats(payload.data);
   if (!stats) return null;
 
@@ -648,19 +661,19 @@ function assertBulkUploadSucceeded(payload: BulkUploadApiResponse): BulkUploadSt
     );
   }
 
-  if (stats.successRows === 0) {
-    throw new ApiError(formatBulkUploadStatsMessage(stats), 400, payload);
-  }
-
-  if (stats.failedRows > 0) {
-    throw new ApiError(
-      `${stats.successRows} of ${stats.totalRows} orders imported. ${formatBulkUploadStatsMessage(stats)}`,
-      400,
-      payload
-    );
-  }
-
   return stats;
+}
+
+function buildBulkUploadMessage(stats: BulkUploadStats | null, fallback?: string | null): string {
+  if (!stats) return fallback ?? 'Shipments added successfully';
+
+  if (stats.successRows === stats.totalRows) {
+    return `${stats.successRows} order(s) imported successfully.`;
+  }
+  if (stats.successRows > 0) {
+    return `${stats.successRows} of ${stats.totalRows} order(s) imported. ${formatBulkUploadStatsMessage(stats)}`;
+  }
+  return `0 of ${stats.totalRows} order(s) imported. ${formatBulkUploadStatsMessage(stats)}`;
 }
 
 function formatBulkUploadErrorMessage(payload: BulkUploadApiResponse): string {
@@ -677,6 +690,7 @@ function formatBulkUploadErrorMessage(payload: BulkUploadApiResponse): string {
 export interface BulkUploadResult {
   message: string;
   shipments: BulkUploadShipmentPreview[];
+  stats: BulkUploadStats | null;
 }
 
 /** POST /api/Order/BulkUpload (multipart: ClientId, file) */
@@ -708,23 +722,20 @@ export async function bulkUploadOrders(
     if (!response.ok) {
       throw new ApiError(text || 'Bulk upload failed', response.status, text);
     }
-    return { message: text || 'File uploaded successfully', shipments: [] };
+    return { message: text || 'File uploaded successfully', shipments: [], stats: null };
   }
 
   if (!response.ok || payload.success === false) {
     throw new ApiError(formatBulkUploadErrorMessage(payload), response.status, payload);
   }
 
-  const stats = assertBulkUploadSucceeded(payload);
+  const stats = resolveBulkUploadStats(payload);
   const shipments = extractBulkUploadShipments(payload.data);
-  const successMessage =
-    stats && stats.successRows > 0
-      ? `${stats.successRows} order(s) imported successfully.`
-      : (payload.message ?? 'Shipments added successfully');
 
   return {
-    message: successMessage,
+    message: buildBulkUploadMessage(stats, payload.message),
     shipments,
+    stats,
   };
 }
 

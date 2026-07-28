@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
+import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseApiErrorMessage } from "@/lib/api/errors";
@@ -177,6 +178,8 @@ export default function AdminOrdersView() {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const emptyOrderFilters = {
     awbId: "",
     referenceId: "",
@@ -411,14 +414,27 @@ export default function AdminOrdersView() {
     });
   }, [orders, tableSearch, appliedFilters, selectedClient]);
 
-  const visibleOrderIds = useMemo(
+  useEffect(() => {
+    setPage(1);
+  }, [tableSearch, appliedFilters, orders]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+
+  const pagedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
+
+  const matchedOrderIds = useMemo(
     () => filteredOrders.map((order) => order.orderId),
     [filteredOrders]
   );
+  const pageOrderIds = useMemo(() => pagedOrders.map((order) => order.orderId), [pagedOrders]);
 
-  const allVisibleSelected =
-    visibleOrderIds.length > 0 && visibleOrderIds.every((orderId) => selectedOrderIds.has(orderId));
-  const someVisibleSelected = visibleOrderIds.some((orderId) => selectedOrderIds.has(orderId));
+  const allPageSelected =
+    pageOrderIds.length > 0 && pageOrderIds.every((orderId) => selectedOrderIds.has(orderId));
+  const somePageSelected = pageOrderIds.some((orderId) => selectedOrderIds.has(orderId));
 
   const toggleOrderSelection = (orderId: number) => {
     setSelectedOrderIds((prev) => {
@@ -435,7 +451,7 @@ export default function AdminOrdersView() {
   const handleSelectAllVisible = () => {
     setSelectedOrderIds((prev) => {
       const next = new Set(prev);
-      visibleOrderIds.forEach((orderId) => next.add(orderId));
+      matchedOrderIds.forEach((orderId) => next.add(orderId));
       return next;
     });
   };
@@ -445,16 +461,20 @@ export default function AdminOrdersView() {
   };
 
   const handleToggleAllVisible = () => {
-    if (allVisibleSelected) {
+    if (allPageSelected) {
       setSelectedOrderIds((prev) => {
         const next = new Set(prev);
-        visibleOrderIds.forEach((orderId) => next.delete(orderId));
+        pageOrderIds.forEach((orderId) => next.delete(orderId));
         return next;
       });
       return;
     }
 
-    handleSelectAllVisible();
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      pageOrderIds.forEach((orderId) => next.add(orderId));
+      return next;
+    });
   };
 
   const handleFinalizeOrders = async () => {
@@ -679,10 +699,10 @@ export default function AdminOrdersView() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</h1>
 
-        <div className="flex flex-wrap gap-2 justify-end">
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <ActionButton
             icon={Import}
             label="Import"
@@ -783,7 +803,7 @@ export default function AdminOrdersView() {
       )}
 
       <Modal isOpen={modalStates.import} onClose={() => toggleModal("import", false)} title="Order Import" maxWidth="max-w-6xl">
-        <div className="flex items-end gap-6 bg-white p-4 rounded-lg">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6 bg-white p-4 rounded-lg">
           <div className="flex-1 space-y-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
               Client <span className="text-red-500">*</span>
@@ -820,7 +840,7 @@ export default function AdminOrdersView() {
               toggleModal("import", false);
               router.push(`/orders/import?${params.toString()}`);
             }}
-            className="h-11 px-10 bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-11 px-10 w-full sm:w-auto bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Choose Client
           </button>
@@ -861,14 +881,14 @@ export default function AdminOrdersView() {
 
       <Modal isOpen={modalStates.trashed} onClose={() => toggleModal("trashed", false)} title="Trashed Orders List" maxWidth="max-w-[1400px]">
         <div className="space-y-6">
-          <div className="flex items-end gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
-            <div className="w-64">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6 bg-slate-50 p-6 rounded-xl border border-slate-100">
+            <div className="w-full sm:w-64">
               <ModalInput label="Tracking ID #" placeholder="Tracking ID #" />
             </div>
-            <div className="w-64">
+            <div className="w-full sm:w-64">
               <ModalInput label="Rider" placeholder="Please Select a rider" type="select" />
             </div>
-            <button className="h-11 px-10 bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center gap-2">
+            <button className="h-11 px-10 w-full sm:w-auto bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all flex items-center justify-center gap-2">
               <RotateCcw size={14} />
               Restore
             </button>
@@ -938,11 +958,11 @@ export default function AdminOrdersView() {
           <ModalInput label="Pickup Location" placeholder="Pickup Location" type="select" />
           <ModalInput label="Request Title" placeholder="Orders Pickup Request" />
           <ModalInput label="Description" placeholder="Please Pickup Orders From Our warehouse" type="textarea" />
-          <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
-            <button onClick={() => toggleModal("pickup", false)} className="h-11 px-10 border border-primary text-primary text-[11px] font-bold rounded-lg uppercase hover:bg-slate-50 transition-all">
+          <div className="flex flex-col sm:flex-row gap-3 sm:justify-end pt-4 border-t border-slate-100">
+            <button onClick={() => toggleModal("pickup", false)} className="h-11 px-10 w-full sm:w-auto border border-primary text-primary text-[11px] font-bold rounded-lg uppercase hover:bg-slate-50 transition-all">
               Cancel
             </button>
-            <button className="h-11 px-10 bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all">
+            <button className="h-11 px-10 w-full sm:w-auto bg-primary text-white text-[11px] font-bold rounded-lg uppercase shadow-lg shadow-primary/20 active:scale-95 transition-all">
               Send
             </button>
           </div>
@@ -1081,20 +1101,20 @@ export default function AdminOrdersView() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="p-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-slate-500 uppercase">Show</span>
-              <select className="h-8 border border-slate-200 rounded px-2 text-xs font-bold text-primary">
-                <option>50</option>
-              </select>
-              <span className="text-[11px] font-bold text-slate-500 uppercase">entries</span>
-            </div>
+        <div className="p-4 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4 bg-slate-50/30">
+          <div className="flex flex-wrap items-center gap-4">
+            <PageSizeSelect
+              pageSize={pageSize}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={handleSelectAllVisible}
-                disabled={visibleOrderIds.length === 0}
+                disabled={matchedOrderIds.length === 0}
                 className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Select All
@@ -1110,8 +1130,8 @@ export default function AdminOrdersView() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-wrap gap-2 items-center">
               <button
                 type="button"
                 onClick={handleFinalizeOrders}
@@ -1142,7 +1162,7 @@ export default function AdminOrdersView() {
               </div>
               <button className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase">Cancel</button>
             </div>
-            <div className="flex items-center gap-2 border-l pl-4 border-slate-200">
+            <div className="flex items-center gap-2 sm:border-l sm:pl-4 border-slate-200">
               <span className="text-[11px] font-bold text-slate-500 uppercase">Search:</span>
               <input
                 type="text"
@@ -1161,16 +1181,16 @@ export default function AdminOrdersView() {
                 <th className="p-4 w-10">
                   <input
                     type="checkbox"
-                    checked={allVisibleSelected}
+                    checked={allPageSelected}
                     ref={(input) => {
                       if (input) {
-                        input.indeterminate = someVisibleSelected && !allVisibleSelected;
+                        input.indeterminate = somePageSelected && !allPageSelected;
                       }
                     }}
                     onChange={handleToggleAllVisible}
-                    disabled={visibleOrderIds.length === 0}
+                    disabled={pageOrderIds.length === 0}
                     className="rounded border-slate-300 text-primary focus:ring-primary"
-                    aria-label="Select all visible orders"
+                    aria-label="Select all orders on this page"
                   />
                 </th>
                 {ORDER_COLUMNS.map((column) => (
@@ -1200,7 +1220,7 @@ export default function AdminOrdersView() {
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map((order) => (
+                pagedOrders.map((order) => (
                   <tr
                     key={order.orderId}
                     className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
@@ -1229,15 +1249,12 @@ export default function AdminOrdersView() {
           </table>
         </div>
 
-        <div className="p-4 bg-slate-50/30 border-t border-slate-50">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            {loadingOrders
-              ? "Loading entries…"
-              : filteredOrders.length === 0
-                ? "Showing 0 to 0 of 0 entries"
-                : `Showing 1 to ${filteredOrders.length} of ${orders.length} entries`}
-          </p>
-        </div>
+        <OrdersPaginationFooter
+          page={currentPage}
+          pageSize={pageSize}
+          totalItems={filteredOrders.length}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );
