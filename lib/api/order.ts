@@ -557,6 +557,7 @@ export function normalizeBulkUploadShipment(raw: unknown): BulkUploadShipmentPre
       'Locationid',
     ]),
     serviceId: pickValue(record, ['serviceId', 'ServiceId']),
+    warehouseId: pickValue(record, ['warehouseId', 'WarehouseId']),
     service: pickString(record, ['service', 'Service', 'serviceName', 'ServiceName']),
     replacementId: pickString(record, ['replacementId', 'ReplacementId', 'replacementID', 'ReplacementID']),
   };

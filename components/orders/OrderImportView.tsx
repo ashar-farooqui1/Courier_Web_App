@@ -10,6 +10,7 @@ import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import type { BulkUploadShipmentPreview } from "@/lib/types/order";
 import type { PickupLocation } from "@/lib/types/pickup-location";
 import type { Service } from "@/lib/types/service";
+import type { Warehouse } from "@/lib/types/warehouse";
 import { ORDER_IMPORT_TEMPLATE_FILENAME } from "@/lib/orders/order-import-template";
 
 const IMPORT_TABLE_HEADERS = [
@@ -25,6 +26,7 @@ const IMPORT_TABLE_HEADERS = [
   "Amount",
   "Location Id",
   "Service Id",
+  "Warehouse Id",
 ] as const;
 
 function formatPreviewCell(value: number | string | undefined | null): string {
@@ -150,6 +152,7 @@ export function OrderImportView({
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [pickupLocations, setPickupLocations] = useState<PickupLocation[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loadingReference, setLoadingReference] = useState(false);
 
   const loadReferenceData = useCallback(async () => {
@@ -157,9 +160,10 @@ export function OrderImportView({
 
     setLoadingReference(true);
     try {
-      const [locationsRes, servicesRes] = await Promise.all([
+      const [locationsRes, servicesRes, warehousesRes] = await Promise.all([
         fetch(`/api/clients/${effectiveClientId}/pickup-locations`),
         fetch("/api/services"),
+        fetch("/api/warehouses"),
       ]);
 
       const locationsPayload = (await locationsRes.json().catch(() => null)) as
@@ -169,6 +173,9 @@ export function OrderImportView({
         | Service[]
         | { data?: Service[] }
         | null;
+      const warehousesPayload = (await warehousesRes.json().catch(() => null)) as
+        | Warehouse[]
+        | null;
 
       setPickupLocations(Array.isArray(locationsPayload) ? locationsPayload : []);
       const serviceRows = Array.isArray(servicesPayload)
@@ -177,9 +184,11 @@ export function OrderImportView({
           ? servicesPayload.data
           : [];
       setServices(serviceRows);
+      setWarehouses(Array.isArray(warehousesPayload) ? warehousesPayload : []);
     } catch {
       setPickupLocations([]);
       setServices([]);
+      setWarehouses([]);
     } finally {
       setLoadingReference(false);
     }
@@ -201,6 +210,10 @@ export function OrderImportView({
   const serviceRows: ReferenceRow[] = services.map((service) => ({
     copyValue: String(service.serviceId),
     columns: [String(service.serviceId), service.serviceName],
+  }));
+  const warehouseRows: ReferenceRow[] = warehouses.map((warehouse) => ({
+    copyValue: String(warehouse.warehouseId),
+    columns: [String(warehouse.warehouseId), warehouse.name, warehouse.city ?? ""],
   }));
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -391,8 +404,9 @@ export function OrderImportView({
             At least the <span className="font-bold">Pieces</span> column needs to contain the number
             of pieces (for example 1). The <span className="font-bold">Customer Comment</span> column
             (column 10) is optional and can be left <span className="font-bold">empty</span>. Use valid{" "}
-            <span className="font-bold">Locationid</span> and <span className="font-bold">ServiceId</span>{" "}
-            from the reference lists below. Download the template — do not remove or rename columns.
+            <span className="font-bold">Locationid</span>, <span className="font-bold">ServiceId</span>,{" "}
+            and <span className="font-bold">WarehouseId</span> from the reference lists below. Download
+            the template — do not remove or rename columns.
           </p>
           <button
             type="button"
@@ -424,6 +438,12 @@ export function OrderImportView({
                 rows={pickupRows}
                 loading={loadingReference}
                 emptyMessage="No pickup locations found"
+              />
+              <ReferenceDropdown
+                label="Warehouses"
+                rows={warehouseRows}
+                loading={loadingReference}
+                emptyMessage="No warehouses found"
               />
             </div>
           </div>
@@ -531,6 +551,7 @@ export function OrderImportView({
                     <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.amount)}</td>
                     <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.locationId)}</td>
                     <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.serviceId)}</td>
+                    <td className="p-3 whitespace-nowrap">{formatPreviewCell(row.warehouseId)}</td>
                   </tr>
                 ))
               )}

@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
@@ -191,6 +192,7 @@ export default function ClientOrdersView() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [finalizingOrders, setFinalizingOrders] = useState(false);
+  const [retryingDispatch, setRetryingDispatch] = useState(false);
 
   const toggleModal = (key: keyof typeof modalStates, val: boolean) => {
     setModalStates((prev) => ({ ...prev, [key]: val }));
@@ -389,6 +391,52 @@ export default function ClientOrdersView() {
     }
   };
 
+  const handleRetryDispatch = async () => {
+    if (!token) {
+      setActionError("Client session not found. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to retry dispatch.");
+      return;
+    }
+
+    setRetryingDispatch(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/orders/retry-dispatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to retry dispatch (${response.status})`);
+      }
+
+      setSuccessMessage(
+        payload?.message ??
+          (orderIds.length === 1
+            ? "Order resubmitted for dispatch."
+            : `${orderIds.length} orders resubmitted for dispatch.`)
+      );
+      await loadOrders();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to retry dispatch");
+    } finally {
+      setRetryingDispatch(false);
+    }
+  };
+
   const handleFinalizeOrders = async () => {
     if (!token) {
       setActionError("Client session not found. Please log in again.");
@@ -447,6 +495,12 @@ export default function ClientOrdersView() {
             label={generatingAwb ? "Generating…" : "AWB Print"}
             onClick={handleAwbPrint}
             disabled={generatingAwb || loadingOrders}
+          />
+          <ActionButton
+            icon={RefreshCw}
+            label={retryingDispatch ? "Retrying…" : "Retry Dispatch"}
+            onClick={handleRetryDispatch}
+            disabled={retryingDispatch || loadingOrders || selectedOrderIds.size === 0}
           />
           <ActionButton icon={Plus} label="Add New" onClick={() => toggleModal("addNew", true)} />
           <ActionButton icon={Truck} label="Pickup Request" onClick={() => toggleModal("pickup", true)} />

@@ -1,7 +1,8 @@
 /**
- * Column order must match backend Excel parsing (row.Cell(1) … row.Cell(12)):
+ * Column order must match backend Excel parsing (row.Cell(1) … row.Cell(13)):
  * ConsigneeName, ConsigneeAddress, ConsigneeContactNo, ProductName, COD, Pieces,
- * Weight, Destination, CustomerReference, CustomerComment, LocationId, ServiceId.
+ * Weight, Destination, CustomerReference, CustomerComment, LocationId, ServiceId,
+ * WarehouseId.
  * Keep names exactly as written — including "Customer Refrences" and lowercase "weight".
  */
 export const ORDER_IMPORT_TEMPLATE_HEADERS = [
@@ -17,11 +18,12 @@ export const ORDER_IMPORT_TEMPLATE_HEADERS = [
   "Customer Comment",
   "Locationid",
   "ServiceId",
+  "WarehouseId",
 ] as const;
 
-/** Shipment fields only (excludes Locationid / ServiceId). */
+/** Shipment fields only (excludes Locationid / ServiceId / WarehouseId). */
 export const ORDER_IMPORT_DATA_HEADERS = ORDER_IMPORT_TEMPLATE_HEADERS.filter(
-  (header) => header !== "Locationid" && header !== "ServiceId"
+  (header) => header !== "Locationid" && header !== "ServiceId" && header !== "WarehouseId"
 );
 
 export const ORDER_IMPORT_TEMPLATE_SAMPLE_ROW = [
@@ -35,6 +37,7 @@ export const ORDER_IMPORT_TEMPLATE_SAMPLE_ROW = [
   "Karachi",
   "REF-001",
   "",
+  "1",
   "1",
   "1",
 ] as const;

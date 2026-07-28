@@ -108,6 +108,7 @@ const HEADER_MAP: Record<keyof BulkUploadShipmentPreview, string[]> = {
   ],
   locationId: ["location id", "locationid", "location_id", "pickup location id"],
   serviceId: ["service id", "serviceid", "service_id"],
+  warehouseId: ["warehouse id", "warehouseid", "warehouse_id"],
   service: [
     "service",
     "service name",
@@ -197,6 +198,7 @@ function mapRowWithColumns(
     amount: read("amount", true),
     locationId: read("locationId", true),
     serviceId: read("serviceId", true),
+    warehouseId: read("warehouseId", true),
     service: read("service") as string,
     replacementId: read("replacementId") as string,
   };

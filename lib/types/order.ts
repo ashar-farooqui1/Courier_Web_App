@@ -96,6 +96,7 @@ export interface BulkUploadShipmentPreview {
   amount: number | string;
   locationId: number | string;
   serviceId: number | string;
+  warehouseId: number | string;
   service: string;
   replacementId: string;
 }
