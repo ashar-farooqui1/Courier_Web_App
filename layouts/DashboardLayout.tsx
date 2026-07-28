@@ -95,7 +95,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
         <footer className="px-6 py-4 bg-white border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400 font-medium uppercase tracking-widest">
           <p>COPYRIGHT © 2026 STALLIONEX COURIER, All rights Reserved</p>
-          <p>Developed by HNH Tech Solutions</p>
+          <p>Developed by Threecircle</p>
         </footer>
       </div>
     </div>
