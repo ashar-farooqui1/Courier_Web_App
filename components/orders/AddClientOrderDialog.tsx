@@ -292,7 +292,7 @@ export function AddClientOrderDialog({
 
     loadCities();
     loadServices();
-    setDefaultWarehouseId(getDefaultWarehouse()?.warehouseId ?? 0);
+    setDefaultWarehouseId(getDefaultWarehouse()?.warehouseId ?? (isAdmin ? 0 : 1));
     if (isAdmin) {
       loadClients();
     }

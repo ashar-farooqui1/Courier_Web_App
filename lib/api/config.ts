@@ -1,6 +1,6 @@
 /** Host only — paths in API_ROUTES must start with `/api/`. */
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api-courier.threecircle.io";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://192.168.100.82:5180/";
 
 export const API_ROUTES = {
   clients: "/api/Client",
