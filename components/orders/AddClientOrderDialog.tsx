@@ -5,6 +5,7 @@ import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { logout } from "@/lib/auth/role";
 import { getDefaultWarehouse } from "@/lib/auth/warehouse";
 import type { CreateOrderPayload, OrderPickupLocationDetails } from "@/lib/types/order";
 import type { City } from "@/lib/types/city";
@@ -405,7 +406,8 @@ export function AddClientOrderDialog({
     }
 
     if (isAdmin && defaultWarehouseId < 1) {
-      setSubmitError("Default warehouse not set. Please log in again.");
+      setSubmitError("Default warehouse not set. Logging out...");
+      logout();
       return;
     }
 

@@ -1,4 +1,5 @@
 import { mapRoleNameToLoginRole } from "@/lib/auth/map-role";
+import { clearDefaultWarehouse } from "@/lib/auth/warehouse";
 import type { AuthUser } from "@/lib/types/user";
 
 export type LoginRole = "client" | "admin" | "super-admin" | "rider";
@@ -115,6 +116,7 @@ export function clearLoginSession(): void {
   clearStorageKeys(localStorage);
   clearStorageKeys(sessionStorage);
   localStorage.removeItem(REMEMBER_KEY);
+  clearDefaultWarehouse();
 }
 
 /** Clears all auth data (including localStorage) and redirects to login. */

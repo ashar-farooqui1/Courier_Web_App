@@ -22,3 +22,8 @@ export function saveDefaultWarehouse(warehouse: DefaultWarehouse): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(DEFAULT_WAREHOUSE_KEY, JSON.stringify(warehouse));
 }
+
+export function clearDefaultWarehouse(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(DEFAULT_WAREHOUSE_KEY);
+}
