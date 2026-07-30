@@ -1,19 +1,53 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Calendar, Download } from "lucide-react";
+import { Calendar, Download } from "lucide-react";
+import { useAuthSession } from "@/hooks/useAuthRole";
+import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { parseApiErrorMessage } from "@/lib/api/errors";
+import { unwrapOrdersList } from "@/lib/api/order";
+import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
+import { formatOrderDate, formatAmount } from "@/components/orders/order-columns";
+import { PageSizeSelect, OrdersPaginationFooter } from "@/components/orders/OrdersPagination";
+import { formatOrderStatusLabel } from "@/lib/orders/order-status-options";
+import type { ClientOrder } from "@/lib/types/order";
+import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
+import type { MnpTrackingDetail } from "@/lib/types/mnp";
+
+/** Groups the backend's granular order-status enum into the dashboard's summary buckets. */
+const STATUS_BUCKETS: Record<string, OrderStatusApiValue[]> = {
+  Booking: ["Draft", "Booked", "Finalize"],
+  Picked: ["PickedUp"],
+  "In Transit": [
+    "ArrivedAtOrigin",
+    "OutForDestination",
+    "ArrivedAtDestination",
+    "RequestForReattempt",
+    "Reattempted",
+    "TransitLost",
+  ],
+  "Out for Delivery": ["OutForDelivery"],
+  "Shipper Advise": ["HaltAdviceSent"],
+  Delivered: ["Delivered"],
+  "Return In Transit": ["ReturnConfirm", "ReturnInTransit", "ReturnOutForDelivery", "ReturnReceivedAtOrigin"],
+  Returned: ["ParcelReturned"],
+  Cancelled: ["Cancelled", "ShipmentLost", "Damage"],
+};
 
 const FilterField = ({
   label,
   placeholder,
   type = "text",
-  value = "",
+  value,
+  onChange,
 }: {
   label: string;
   placeholder?: string;
   type?: string;
   value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) => (
   <div className="flex-1 min-w-[180px] space-y-1">
     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
@@ -22,7 +56,8 @@ const FilterField = ({
     <div className="relative group">
       <input
         type={type}
-        defaultValue={value}
+        value={value ?? ""}
+        onChange={onChange}
         placeholder={placeholder}
         className="w-full h-10 px-4 bg-white border border-slate-200 rounded-md text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-slate-300"
       />
@@ -36,108 +71,315 @@ const FilterField = ({
   </div>
 );
 
-const SelectField = ({ label, placeholder }: { label: string; placeholder: string }) => (
-  <div className="flex-1 min-w-[180px] space-y-1">
-    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-      {label}
-    </label>
-    <div className="relative">
-      <select className="w-full h-10 px-4 bg-white border border-slate-200 rounded-md text-sm text-slate-700 appearance-none focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all">
-        <option value="">{placeholder}</option>
-        <option value="booking">Booking Date</option>
-        <option value="pickup">Pickup Date</option>
-        <option value="delivery">Delivery Date</option>
-      </select>
-      <ChevronDown
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-        size={14}
-      />
-    </div>
-  </div>
-);
-
 const StatusCard = ({
   label,
   value,
   colorClass,
   active,
+  disabled,
   onClick,
 }: {
   label: string;
   value: number;
   colorClass: string;
   active: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) => (
   <div
-    onClick={onClick}
+    onClick={disabled ? undefined : onClick}
     className={cn(
-      "flex flex-col items-center justify-center p-6 rounded-lg text-white shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer min-h-[120px]",
+      "flex flex-col items-center justify-center p-6 rounded-lg text-white shadow-lg transition-all duration-300 min-h-[120px]",
       colorClass,
-      active && "ring-4 ring-primary ring-offset-2 scale-[1.05] z-10"
+      disabled ? "opacity-50 cursor-not-allowed" : "hover:scale-[1.02] cursor-pointer",
+      active && !disabled && "ring-4 ring-primary ring-offset-2 scale-[1.05] z-10"
     )}
+    title={disabled ? "Not tracked yet" : undefined}
   >
     <span className="text-xs font-bold uppercase tracking-widest mb-2 opacity-90">{label}</span>
     <span className="text-4xl font-black">{value}</span>
   </div>
 );
 
-const CLIENT_STATS = [
-  { label: "Total", value: 0, color: "bg-slate-500" },
-  { label: "Booking", value: 0, color: "bg-yellow-400" },
-  { label: "Picked", value: 0, color: "bg-[#002B5B]" },
-  { label: "In Transit", value: 0, color: "bg-slate-500" },
-  { label: "Out for Delivery", value: 0, color: "bg-blue-500" },
-  { label: "Shipper Advise", value: 0, color: "bg-cyan-500" },
-  { label: "Delivered", value: 0, color: "bg-green-400" },
-  { label: "Return In Transit", value: 0, color: "bg-orange-400" },
-  { label: "Returned", value: 0, color: "bg-slate-700" },
-  { label: "Payment Settled", value: 0, color: "bg-green-600" },
-  { label: "Cancelled", value: 0, color: "bg-red-500" },
-];
+interface DashboardColumn {
+  label: string;
+  filterable: boolean;
+  type?: "date";
+  getValue: (order: ClientOrder) => string;
+  render: (order: ClientOrder) => ReactNode;
+}
 
-const TABLE_HEADERS = [
-  "CN",
-  "Origin",
-  "Destination",
-  "Customer Name",
-  "Phone Number",
-  "COD Amount",
-  "Last Status",
-  "Booking Date",
-  "Pickup Date",
-  "Last Status Date",
-  "Payment Date",
-  "Shipper Advise",
-  "Transaction No",
-  "Support Ticket",
+const DASHBOARD_COLUMNS: DashboardColumn[] = [
+  { label: "CN", filterable: true, getValue: (o) => o.awbNo ?? "", render: (o) => o.awbNo || "—" },
+  { label: "Origin", filterable: true, getValue: (o) => o.originCity ?? "", render: (o) => o.originCity || "—" },
+  {
+    label: "Destination",
+    filterable: true,
+    getValue: (o) => o.destinationCity ?? "",
+    render: (o) => o.destinationCity || "—",
+  },
+  {
+    label: "Customer Name",
+    filterable: true,
+    getValue: (o) => o.customerName ?? "",
+    render: (o) => o.customerName || "—",
+  },
+  {
+    label: "Phone Number",
+    filterable: true,
+    getValue: (o) => o.customerPhone ?? "",
+    render: (o) => o.customerPhone || "—",
+  },
+  {
+    label: "COD Amount",
+    filterable: true,
+    getValue: (o) => String(o.amount ?? ""),
+    render: (o) => formatAmount(o.amount),
+  },
+  {
+    label: "Last Status",
+    filterable: true,
+    getValue: (o) => formatOrderStatusLabel(o.status),
+    render: (o) => (
+      <span className="inline-flex px-2 py-1 rounded text-[10px] font-bold uppercase bg-amber-50 text-amber-700">
+        {formatOrderStatusLabel(o.status)}
+      </span>
+    ),
+  },
+  {
+    label: "Booking Date",
+    filterable: true,
+    type: "date",
+    getValue: (o) => (o.orderDate ? o.orderDate.slice(0, 10) : ""),
+    render: (o) => formatOrderDate(o.orderDate),
+  },
+  { label: "Pickup Date", filterable: false, getValue: () => "", render: () => "—" },
+  { label: "Last Status Date", filterable: false, getValue: () => "", render: () => "—" },
+  { label: "Payment Date", filterable: false, getValue: () => "", render: () => "—" },
+  {
+    label: "Shipper Advise",
+    filterable: true,
+    getValue: (o) => (o.status === "HaltAdviceSent" ? "Yes" : "No"),
+    render: (o) => (o.status === "HaltAdviceSent" ? "Yes" : "No"),
+  },
+  { label: "Transaction No", filterable: false, getValue: () => "", render: () => "—" },
+  { label: "Support Ticket", filterable: false, getValue: () => "", render: () => "—" },
 ];
 
 export default function ClientDashboardView() {
+  const { token, clientId, role, ready } = useAuthSession();
+
+  const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
   const [selectedStatus, setSelectedStatus] = useState<string | null>("Booking");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [originQuery, setOriginQuery] = useState("");
+  const [destinationQuery, setDestinationQuery] = useState("");
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
+  const loadOrders = useCallback(async () => {
+    if (!ready) return;
+
+    if (!token || !Number.isInteger(clientId) || clientId < 1) {
+      setOrders([]);
+      setOrdersError("Client session not found. Please log in again.");
+      setLoadingOrders(false);
+      return;
+    }
+
+    setLoadingOrders(true);
+    setOrdersError(null);
+
+    try {
+      const response = await fetch(`/api/orders?clientId=${clientId}`, {
+        headers: buildAppAuthHeaders(token, role, clientId),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(parseApiErrorMessage(payload, `Failed to load orders (${response.status})`));
+      }
+
+      const fetchedOrders = unwrapOrdersList(payload);
+
+      if (!fetchedOrders.some(isMnpOrder)) {
+        setOrders(fetchedOrders);
+      } else {
+        try {
+          const mnpResponse = await fetch(`/api/orders/mnp-tracking?clientId=${clientId}`, {
+            headers: buildAppAuthHeaders(token, role, clientId),
+          });
+          const mnpPayload = (await mnpResponse.json().catch(() => null)) as {
+            tracking_Details?: MnpTrackingDetail[];
+          } | null;
+          const statusMap = mnpResponse.ok
+            ? buildMnpStatusMap(mnpPayload?.tracking_Details ?? [])
+            : new Map<string, string>();
+          setOrders(applyMnpTrackingStatus(fetchedOrders, statusMap));
+        } catch {
+          setOrders(fetchedOrders);
+        }
+      }
+    } catch (err) {
+      setOrders([]);
+      setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
+    } finally {
+      setLoadingOrders(false);
+    }
+  }, [clientId, ready, role, token]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const bucket of Object.keys(STATUS_BUCKETS)) counts[bucket] = 0;
+
+    orders.forEach((order) => {
+      for (const [bucket, statuses] of Object.entries(STATUS_BUCKETS)) {
+        if ((statuses as string[]).includes(order.status)) {
+          counts[bucket] += 1;
+          break;
+        }
+      }
+    });
+
+    return counts;
+  }, [orders]);
+
+  const stats = [
+    { label: "Total", value: orders.length, color: "bg-slate-500" },
+    { label: "Booking", value: statusCounts["Booking"] ?? 0, color: "bg-yellow-400" },
+    { label: "Picked", value: statusCounts["Picked"] ?? 0, color: "bg-[#002B5B]" },
+    { label: "In Transit", value: statusCounts["In Transit"] ?? 0, color: "bg-slate-500" },
+    { label: "Out for Delivery", value: statusCounts["Out for Delivery"] ?? 0, color: "bg-blue-500" },
+    { label: "Shipper Advise", value: statusCounts["Shipper Advise"] ?? 0, color: "bg-cyan-500" },
+    { label: "Delivered", value: statusCounts["Delivered"] ?? 0, color: "bg-green-400" },
+    { label: "Return In Transit", value: statusCounts["Return In Transit"] ?? 0, color: "bg-orange-400" },
+    { label: "Returned", value: statusCounts["Returned"] ?? 0, color: "bg-slate-700" },
+    { label: "Payment Settled", value: 0, color: "bg-green-600", disabled: true },
+    { label: "Cancelled", value: statusCounts["Cancelled"] ?? 0, color: "bg-red-500" },
+  ];
+
+  const isWithinDateRange = (orderDate: string, from: string, to: string) => {
+    if (!from && !to) return true;
+    const parsed = new Date(orderDate);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const day = parsed.toISOString().slice(0, 10);
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    return true;
+  };
+
+  const updateColumnFilter = (label: string, value: string) => {
+    setColumnFilters((prev) => ({ ...prev, [label]: value }));
+  };
+
+  const filteredOrders = useMemo(() => {
+    const origin = originQuery.trim().toLowerCase();
+    const destination = destinationQuery.trim().toLowerCase();
+
+    return orders.filter((order) => {
+      if (selectedStatus === "Payment Settled") return false;
+
+      if (selectedStatus && selectedStatus !== "Total") {
+        const bucket = STATUS_BUCKETS[selectedStatus];
+        if (bucket && !(bucket as string[]).includes(order.status)) return false;
+      }
+
+      if (!isWithinDateRange(order.orderDate, dateFrom, dateTo)) return false;
+
+      if (origin && !order.originCity?.toLowerCase().includes(origin)) return false;
+      if (destination && !order.destinationCity?.toLowerCase().includes(destination)) return false;
+
+      for (const column of DASHBOARD_COLUMNS) {
+        if (!column.filterable) continue;
+        const filterValue = columnFilters[column.label]?.trim();
+        if (!filterValue) continue;
+
+        const cellValue = column.getValue(order);
+        if (column.type === "date") {
+          if (cellValue !== filterValue) return false;
+        } else if (!cellValue.toLowerCase().includes(filterValue.toLowerCase())) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [orders, selectedStatus, dateFrom, dateTo, originQuery, destinationQuery, columnFilters]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedStatus, dateFrom, dateTo, originQuery, destinationQuery, columnFilters, orders]);
+
+  const pagedOrders = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, page, pageSize]);
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-6">
         <div className="flex flex-wrap gap-4">
-          <SelectField label="Filter By" placeholder="Booking Date" />
-          <FilterField label="From" type="date" value="2026-06-01" />
-          <FilterField label="To" type="date" value="2026-06-03" />
+          <FilterField
+            label="Booking Date (From)"
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <FilterField
+            label="Booking Date (To)"
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
         </div>
         <div className="flex flex-wrap gap-4">
-          <FilterField label="Origin" placeholder="Origin" />
-          <FilterField label="Destination" placeholder="Destination" />
+          <FilterField
+            label="Origin"
+            placeholder="Origin"
+            value={originQuery}
+            onChange={(e) => setOriginQuery(e.target.value)}
+          />
+          <FilterField
+            label="Destination"
+            placeholder="Destination"
+            value={destinationQuery}
+            onChange={(e) => setDestinationQuery(e.target.value)}
+          />
         </div>
       </div>
 
+      {ordersError && (
+        <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+          <span>{ordersError}</span>
+          <button
+            type="button"
+            onClick={loadOrders}
+            className="shrink-0 h-8 px-4 bg-red-600 text-white text-[10px] font-bold rounded uppercase hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-        {CLIENT_STATS.map((stat) => (
+        {stats.map((stat) => (
           <StatusCard
             key={stat.label}
             label={stat.label}
             value={stat.value}
             colorClass={stat.color}
             active={selectedStatus === stat.label}
+            disabled={stat.disabled}
             onClick={() => setSelectedStatus(stat.label)}
           />
         ))}
@@ -148,14 +390,13 @@ export default function ClientDashboardView() {
           <div className="p-8 border-b border-slate-50 flex flex-col gap-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">Show</span>
-                  <select className="h-9 border border-slate-200 rounded px-2 text-xs font-bold text-primary">
-                    <option>50</option>
-                    <option>100</option>
-                  </select>
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">entries</span>
-                </div>
+                <PageSizeSelect
+                  pageSize={pageSize}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setPage(1);
+                  }}
+                />
               </div>
 
               <h2 className="text-xl font-bold text-slate-600 flex items-center gap-2">
@@ -172,48 +413,64 @@ export default function ClientDashboardView() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-50 bg-slate-50/30">
-                  {TABLE_HEADERS.map((header) => (
+                  {DASHBOARD_COLUMNS.map((column) => (
                     <th
-                      key={header}
+                      key={column.label}
                       className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap"
                     >
-                      {header}
+                      {column.label}
                     </th>
                   ))}
                 </tr>
                 <tr className="border-b border-slate-50">
-                  {TABLE_HEADERS.map((header) => (
-                    <td key={header} className="p-2">
-                      {header.includes("Date") ? (
-                        <input
-                          type="date"
-                          className="w-full h-8 px-2 border border-slate-100 rounded text-[10px] font-bold text-primary focus:outline-none appearance-none"
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          className="w-full h-8 px-2 border border-slate-100 rounded text-[10px] font-bold text-primary focus:outline-none"
-                        />
-                      )}
+                  {DASHBOARD_COLUMNS.map((column) => (
+                    <td key={column.label} className="p-2">
+                      <input
+                        type={column.type === "date" ? "date" : "text"}
+                        value={columnFilters[column.label] ?? ""}
+                        onChange={(e) => updateColumnFilter(column.label, e.target.value)}
+                        disabled={!column.filterable}
+                        title={column.filterable ? undefined : "Not tracked yet"}
+                        className="w-full h-8 px-2 border border-slate-100 rounded text-[10px] font-bold text-primary focus:outline-none appearance-none disabled:opacity-40 disabled:cursor-not-allowed"
+                      />
                     </td>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={TABLE_HEADERS.length} className="py-12 text-center">
-                    <p className="text-slate-300 italic text-sm font-medium">No Data</p>
-                  </td>
-                </tr>
+                {loadingOrders ? (
+                  <tr>
+                    <td colSpan={DASHBOARD_COLUMNS.length} className="py-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                      Loading orders…
+                    </td>
+                  </tr>
+                ) : pagedOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={DASHBOARD_COLUMNS.length} className="py-12 text-center">
+                      <p className="text-slate-300 italic text-sm font-medium">No Data</p>
+                    </td>
+                  </tr>
+                ) : (
+                  pagedOrders.map((order) => (
+                    <tr key={order.orderId} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      {DASHBOARD_COLUMNS.map((column) => (
+                        <td key={column.label} className="p-4 text-[11px] font-medium text-slate-600 whitespace-nowrap">
+                          {column.render(order)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
 
-          <div className="p-4 bg-slate-50/30 border-t border-slate-50">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Showing 0 to 0 of 0 entries
-            </p>
-          </div>
+          <OrdersPaginationFooter
+            page={page}
+            pageSize={pageSize}
+            totalItems={filteredOrders.length}
+            onPageChange={setPage}
+          />
         </div>
       )}
     </div>

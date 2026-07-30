@@ -25,6 +25,7 @@ import { parseContentDispositionFilename } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
 import type { MnpTrackingDetail } from "@/lib/types/mnp";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
+import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 
@@ -135,11 +136,15 @@ const OrderFilter = ({
   placeholder,
   type = "text",
   value,
+  onChange,
+  options,
 }: {
   label: string;
   placeholder?: string;
   type?: string;
   value?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  options?: string[];
 }) => (
   <div className="space-y-1">
     <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
@@ -148,8 +153,17 @@ const OrderFilter = ({
     <div className="relative">
       {type === "select" ? (
         <>
-          <select className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20">
+          <select
+            value={value ?? ""}
+            onChange={onChange}
+            className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20"
+          >
             <option value="">{placeholder}</option>
+            {options?.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
           </select>
           <ChevronDown
             className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
@@ -160,7 +174,8 @@ const OrderFilter = ({
         <>
           <input
             type={type}
-            defaultValue={value}
+            value={value ?? ""}
+            onChange={onChange}
             placeholder={placeholder}
             className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary/20 placeholder:text-slate-300"
           />
@@ -192,6 +207,16 @@ export default function ClientOrdersView() {
   const [tableSearch, setTableSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const emptyOrderFilters = {
+    awbId: "",
+    customerReference: "",
+    dateFrom: "",
+    dateTo: "",
+    city: "",
+    status: "",
+  };
+  const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [finalizingOrders, setFinalizingOrders] = useState(false);
@@ -260,30 +285,78 @@ export default function ClientOrdersView() {
     loadOrders();
   }, [loadOrders]);
 
+  const cityOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((order) => {
+      if (order.destinationCity) set.add(order.destinationCity);
+      if (order.originCity) set.add(order.originCity);
+    });
+    return Array.from(set).sort();
+  }, [orders]);
+
+  const updateFilterDraft = (key: keyof typeof emptyOrderFilters, value: string) => {
+    setFilterDraft((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSearch = () => {
+    setAppliedFilters(filterDraft);
+  };
+
+  const handleClearFilters = () => {
+    setFilterDraft(emptyOrderFilters);
+    setAppliedFilters(emptyOrderFilters);
+  };
+
+  const isWithinDateRange = (orderDate: string, from: string, to: string) => {
+    if (!from && !to) return true;
+    const parsed = new Date(orderDate);
+    if (Number.isNaN(parsed.getTime())) return false;
+    const day = parsed.toISOString().slice(0, 10);
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    return true;
+  };
+
   const filteredOrders = useMemo(() => {
     const query = tableSearch.trim().toLowerCase();
-    if (!query) return orders;
+    const awbQuery = appliedFilters.awbId.trim().toLowerCase();
+    const referenceQuery = appliedFilters.customerReference.trim().toLowerCase();
 
     return orders.filter((order) => {
-      const haystack = [
-        order.awbNo,
-        order.clientName,
-        order.customerName,
-        order.customerPhone,
-        order.customerReference,
-        order.productName,
-        order.serviceName,
-        order.status,
-        order.destinationCity,
-        order.originCity,
-        order.warehouse,
-      ]
-        .join(" ")
-        .toLowerCase();
+      if (query) {
+        const haystack = [
+          order.awbNo,
+          order.clientName,
+          order.customerName,
+          order.customerPhone,
+          order.customerReference,
+          order.productName,
+          order.serviceName,
+          order.status,
+          order.destinationCity,
+          order.originCity,
+          order.warehouse,
+        ]
+          .join(" ")
+          .toLowerCase();
 
-      return haystack.includes(query);
+        if (!haystack.includes(query)) return false;
+      }
+
+      if (awbQuery && !order.awbNo?.toLowerCase().includes(awbQuery)) return false;
+      if (referenceQuery && !order.customerReference?.toLowerCase().includes(referenceQuery)) return false;
+      if (
+        appliedFilters.city &&
+        order.destinationCity !== appliedFilters.city &&
+        order.originCity !== appliedFilters.city
+      )
+        return false;
+      if (appliedFilters.status && order.status !== appliedFilters.status) return false;
+      if (!isWithinDateRange(order.orderDate, appliedFilters.dateFrom, appliedFilters.dateTo)) return false;
+
+      return true;
     });
-  }, [orders, tableSearch]);
+  }, [orders, tableSearch, appliedFilters]);
 
   const handleOrderCreated = (message: string) => {
     setSuccessMessage(message);
@@ -292,7 +365,7 @@ export default function ClientOrdersView() {
 
   useEffect(() => {
     setPage(1);
-  }, [tableSearch, orders]);
+  }, [tableSearch, appliedFilters, orders]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -606,19 +679,83 @@ export default function ClientOrdersView() {
       </Modal>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSearch();
+          }}
+          className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-100 shadow-sm"
+        >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <OrderFilter label="AWB ID" placeholder="Enter AWB ID" />
-            <OrderFilter label="Customer Reference" placeholder="Enter Customer Reference" />
-            <OrderFilter label="Date (From)" type="date" value="2026-06-03" />
-            <OrderFilter label="Date (To)" type="date" value="2026-06-03" />
-            <OrderFilter label="City" placeholder="Select City" type="select" />
-            <OrderFilter label="Status" placeholder="Select Status" type="select" />
+            <OrderFilter
+              label="AWB ID"
+              placeholder="Enter AWB ID"
+              value={filterDraft.awbId}
+              onChange={(e) => updateFilterDraft("awbId", e.target.value)}
+            />
+            <OrderFilter
+              label="Customer Reference"
+              placeholder="Enter Customer Reference"
+              value={filterDraft.customerReference}
+              onChange={(e) => updateFilterDraft("customerReference", e.target.value)}
+            />
+            <OrderFilter
+              label="Date (From)"
+              type="date"
+              value={filterDraft.dateFrom}
+              onChange={(e) => updateFilterDraft("dateFrom", e.target.value)}
+            />
+            <OrderFilter
+              label="Date (To)"
+              type="date"
+              value={filterDraft.dateTo}
+              onChange={(e) => updateFilterDraft("dateTo", e.target.value)}
+            />
+            <OrderFilter
+              label="City"
+              placeholder="Select City"
+              type="select"
+              options={cityOptions}
+              value={filterDraft.city}
+              onChange={(e) => updateFilterDraft("city", e.target.value)}
+            />
+            <div className="space-y-1">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                Status
+              </label>
+              <div className="relative">
+                <select
+                  value={filterDraft.status}
+                  onChange={(e) => updateFilterDraft("status", e.target.value)}
+                  className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20"
+                >
+                  <option value="">Select Status</option>
+                  {ORDER_STATUS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                  size={12}
+                />
+              </div>
+            </div>
           </div>
-          <div className="mt-4">
-            <Button className="w-full h-10 font-bold bg-primary text-white shadow-md">Search</Button>
+          <div className="mt-4 flex gap-3">
+            <Button type="submit" className="flex-1 h-10 font-bold bg-primary text-white shadow-md">
+              Search
+            </Button>
+            <Button
+              type="button"
+              onClick={handleClearFilters}
+              className="h-10 px-6 font-bold bg-white text-primary border border-primary hover:bg-slate-50 shadow-sm"
+            >
+              Clear
+            </Button>
           </div>
-        </div>
+        </form>
 
         <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-4">
           <div className="space-y-1 flex-1">

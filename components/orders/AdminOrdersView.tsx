@@ -125,7 +125,7 @@ const OrderFilter = ({
   placeholder?: string;
   type?: string;
   value?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   options?: string[];
 }) => (
   <div className="space-y-1">
@@ -144,6 +144,14 @@ const OrderFilter = ({
             </option>
           ))}
         </select>
+      ) : type === "textarea" ? (
+        <textarea
+          placeholder={placeholder}
+          value={value ?? ""}
+          onChange={onChange}
+          rows={3}
+          className="w-full px-3 py-2 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary/20 placeholder:text-slate-300 resize-none"
+        />
       ) : (
         <input
           type={type}
@@ -189,7 +197,6 @@ export default function AdminOrdersView() {
     assignDateTo: "",
     rider: "",
     trackingNumbers: "",
-    rollcartNumber: "",
   };
   const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
@@ -348,6 +355,18 @@ export default function AdminOrdersView() {
     setSelectedClientId("");
   };
 
+  const handleTrackingNumberSearch = () => {
+    handleSearch();
+
+    const tokens = parseTrackingNumbers(filterDraft.trackingNumbers);
+    if (tokens.length === 0) return;
+
+    const matchedIds = orders
+      .filter((order) => tokens.includes(order.awbNo?.trim().toLowerCase() ?? ""))
+      .map((order) => order.orderId);
+    setSelectedOrderIds(new Set(matchedIds));
+  };
+
   const isWithinDateRange = (orderDate: string, from: string, to: string) => {
     if (!from && !to) return true;
     const parsed = new Date(orderDate);
@@ -358,10 +377,16 @@ export default function AdminOrdersView() {
     return true;
   };
 
+  const parseTrackingNumbers = (raw: string): string[] =>
+    raw
+      .split(/[\s,]+/)
+      .map((token) => token.trim().toLowerCase())
+      .filter(Boolean);
+
   const filteredOrders = useMemo(() => {
     const query = tableSearch.trim().toLowerCase();
     const awbQuery = appliedFilters.awbId.trim().toLowerCase();
-    const trackingQuery = appliedFilters.trackingNumbers.trim().toLowerCase();
+    const trackingTokens = parseTrackingNumbers(appliedFilters.trackingNumbers);
     const referenceQuery = appliedFilters.referenceId.trim().toLowerCase();
     const selectedClientName = selectedClient ? clientLabel(selectedClient).trim().toLowerCase() : "";
 
@@ -397,7 +422,8 @@ export default function AdminOrdersView() {
       }
 
       if (awbQuery && !order.awbNo?.toLowerCase().includes(awbQuery)) return false;
-      if (trackingQuery && !order.awbNo?.toLowerCase().includes(trackingQuery)) return false;
+      if (trackingTokens.length > 0 && !trackingTokens.includes(order.awbNo?.trim().toLowerCase() ?? ""))
+        return false;
       if (referenceQuery && !order.customerReference?.toLowerCase().includes(referenceQuery)) return false;
       if (
         appliedFilters.city &&
@@ -1069,21 +1095,16 @@ export default function AdminOrdersView() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleSearch();
+            handleTrackingNumberSearch();
           }}
           className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-4"
         >
           <OrderFilter
             label="Tracking Numbers"
-            placeholder="Enter Tracking Numbers"
+            placeholder="Enter Tracking Numbers (one per line, or comma-separated)"
+            type="textarea"
             value={filterDraft.trackingNumbers}
             onChange={(e) => updateFilterDraft("trackingNumbers", e.target.value)}
-          />
-          <OrderFilter
-            label="Rollcart Number"
-            placeholder="Enter Rollcart Number"
-            value={filterDraft.rollcartNumber}
-            onChange={(e) => updateFilterDraft("rollcartNumber", e.target.value)}
           />
           <div className="flex gap-3">
             <Button type="submit" className="flex-1 h-10 font-bold bg-primary text-white shadow-md">
