@@ -11,6 +11,7 @@ import {
   ReceiptText,
   Webhook,
   LogOut,
+  FileStack,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AppLogo from "@/components/AppLogo";
@@ -26,6 +27,7 @@ interface ClientNavItem {
 const CLIENT_NAV: ClientNavItem[] = [
   { icon: <LayoutDashboard size={20} />, label: "Dashboard", href: "/dashboard" },
   { icon: <Banknote size={20} />, label: "Orders", href: "/orders/details" },
+  { icon: <FileStack size={20} />, label: "Loadsheets", href: "/dashboard/loadsheets" },
   { icon: <Users size={20} />, label: "Client Settlement", href: "/orders/client-settlement" },
   { icon: <CircleDot size={20} />, label: "Order Details Report", href: "/reports/order-details" },
   { icon: <CircleDot size={20} />, label: "Order Status Report", href: "/reports/order-status" },

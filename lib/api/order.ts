@@ -9,6 +9,11 @@ import type {
   ClientOrder,
   CreateOrderApiResponse,
   CreateOrderPayload,
+  OrderDetail,
+  OrderDetailHistoryEvent,
+  OrderDetailHistoryGroup,
+  OrderDetailRecipient,
+  OrderDetailSender,
   OrderPickupLocationDetails,
   UpdateOrderStatusApiResponse,
   UpdateOrderStatusPayload,
@@ -306,6 +311,138 @@ export async function getOrdersByClient(
   token?: string
 ): Promise<ClientOrder[]> {
   return fetchOrdersFromApi(API_ROUTES.ordersForClient(clientId), token);
+}
+
+function normalizeOrderDetailSender(raw: unknown): OrderDetailSender {
+  const record = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    name: pickString(record, ['name', 'Name']),
+    phone: pickString(record, ['phone', 'Phone']),
+    email: pickString(record, ['email', 'Email']),
+    address: pickString(record, ['address', 'Address']),
+    area: pickString(record, ['area', 'Area']),
+    pickupScheduledAt: pickString(record, ['pickupScheduledAt', 'PickupScheduledAt']),
+  };
+}
+
+function normalizeOrderDetailRecipient(raw: unknown): OrderDetailRecipient {
+  const record = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  return {
+    name: pickString(record, ['name', 'Name']),
+    phone: pickString(record, ['phone', 'Phone']),
+    address: pickString(record, ['address', 'Address']),
+    area: pickString(record, ['area', 'Area']),
+    deliveredAt: pickString(record, ['deliveredAt', 'DeliveredAt']),
+  };
+}
+
+function normalizeOrderDetailHistoryEvent(raw: unknown): OrderDetailHistoryEvent | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  return {
+    time: pickString(record, ['time', 'Time']),
+    description: pickString(record, ['description', 'Description']),
+    changedByName: pickString(record, ['changedByName', 'ChangedByName']),
+    changedByEmail: pickString(record, ['changedByEmail', 'ChangedByEmail']),
+    changedByRole: pickString(record, ['changedByRole', 'ChangedByRole']),
+  };
+}
+
+function normalizeOrderDetailHistoryGroup(raw: unknown): OrderDetailHistoryGroup | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const events = Array.isArray(record.events ?? record.Events)
+    ? ((record.events ?? record.Events) as unknown[])
+        .map(normalizeOrderDetailHistoryEvent)
+        .filter((event): event is OrderDetailHistoryEvent => event !== null)
+    : [];
+
+  return {
+    dateLabel: pickString(record, ['dateLabel', 'DateLabel']),
+    events,
+  };
+}
+
+export function normalizeOrderDetail(raw: unknown): OrderDetail | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const record = raw as Record<string, unknown>;
+  const orderId = pickNumber(record, ['orderId', 'OrderId']);
+
+  if (!orderId) return null;
+
+  const history = Array.isArray(record.history ?? record.History)
+    ? ((record.history ?? record.History) as unknown[])
+        .map(normalizeOrderDetailHistoryGroup)
+        .filter((group): group is OrderDetailHistoryGroup => group !== null)
+    : [];
+
+  return {
+    orderId,
+    awbNo: pickString(record, ['awbNo', 'AwbNo']),
+    clientName: pickString(record, ['clientName', 'ClientName']),
+    amount: pickNumber(record, ['amount', 'Amount']),
+    status: pickString(record, ['status', 'Status']),
+    quantity: pickNumber(record, ['quantity', 'Quantity']),
+    weight: pickNumber(record, ['weight', 'Weight']),
+    serviceName: pickString(record, ['serviceName', 'ServiceName']),
+    sender: normalizeOrderDetailSender(record.sender ?? record.Sender),
+    recipient: normalizeOrderDetailRecipient(record.recipient ?? record.Recipient),
+    history,
+  };
+}
+
+/** GET /api/Order/GetOrderById?orderId={id} */
+export async function getOrderById(orderId: number, token?: string): Promise<OrderDetail> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.orderById(orderId)}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch order (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) {
+    throw new ApiError('Order details were empty', response.status);
+  }
+
+  const parsed = JSON.parse(text) as unknown;
+  const record = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+
+  if (record.success === false) {
+    throw new ApiError(parseApiErrorMessage(parsed, 'Failed to fetch order'), response.status, parsed);
+  }
+
+  const raw = 'data' in record ? record.data : parsed;
+  const detail = normalizeOrderDetail(raw);
+
+  if (!detail) {
+    throw new ApiError('Invalid order details response', response.status, parsed);
+  }
+
+  return detail;
 }
 
 /** PUT /api/Order/UpdateOrderStatus */

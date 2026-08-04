@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { updateOrderStatus } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
 import { isOrderStatusApiValue } from '@/lib/orders/order-status-options';
+import { readAppRequestContext } from '@/lib/api/app-request-context';
+import { isAdminRole } from '@/lib/auth/role';
 
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get('Authorization');
@@ -51,7 +53,10 @@ export async function PUT(request: Request) {
       return NextResponse.json({ message: 'Invalid order status' }, { status: 400 });
     }
 
-    const message = await updateOrderStatus({ orderIds, status }, token);
+    const ctx = readAppRequestContext(request);
+    const adminId = isAdminRole(ctx.role) ? ctx.userId : 0;
+
+    const message = await updateOrderStatus({ orderIds, status, adminId }, token);
     return NextResponse.json({ success: true, message });
   } catch (error) {
     if (error instanceof ApiError) {

@@ -450,6 +450,7 @@ const Sidebar = () => {
         </SidebarItem>
         <SidebarItem icon={<Users size={20} />} label="Rider" href="/dashboard/riders" isHovered={isHovered} active={pathname === '/dashboard/riders'} />
         <SidebarItem icon={<MapPin size={20} />} label="Cities" href="/dashboard/cities" isHovered={isHovered} active={pathname === '/dashboard/cities'} />
+        <SidebarItem icon={<FileStack size={20} />} label="Loadsheets" href="/dashboard/loadsheets" isHovered={isHovered} active={pathname === '/dashboard/loadsheets'} />
         <SidebarItem icon={<Map size={20} />} label="Active Orders" href="/dashboard/active-orders" isHovered={isHovered} active={pathname === '/dashboard/active-orders'} />
         <SidebarItem icon={<UserCheck size={20} />} label="Client" href="/dashboard/clients" isHovered={isHovered} active={pathname === '/dashboard/clients'} />
         <SidebarItem icon={<Users size={20} />} label="Admin" href="/dashboard/admin" isHovered={isHovered} active={pathname === '/dashboard/admin'} />

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
+import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseApiErrorMessage } from "@/lib/api/errors";
@@ -218,7 +219,10 @@ export default function ClientOrdersView() {
   const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
+  const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [retryingDispatch, setRetryingDispatch] = useState(false);
 
@@ -484,6 +488,46 @@ export default function ClientOrdersView() {
     }
   };
 
+  const handleCreateLoadsheet = async () => {
+    if (!token) {
+      setActionError("Client session not found. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to create a loadsheet.");
+      return;
+    }
+
+    setCreatingLoadsheet(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/loadsheets", {
+        method: "POST",
+        headers: buildAppAuthHeaders(token, role, clientId, {
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({ orderIds }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to create loadsheet (${response.status})`);
+      }
+
+      setSuccessMessage(payload?.message ?? "Loadsheet created successfully.");
+      setSelectedOrderIds(new Set());
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to create loadsheet");
+    } finally {
+      setCreatingLoadsheet(false);
+    }
+  };
+
   const handleRetryDispatch = async () => {
     if (!token) {
       setActionError("Client session not found. Please log in again.");
@@ -528,6 +572,11 @@ export default function ClientOrdersView() {
     } finally {
       setRetryingDispatch(false);
     }
+  };
+
+  const handleOpenOrderDetail = (orderId: number) => {
+    setDetailOrderId(orderId);
+    setDetailModalOpen(true);
   };
 
   const handleFinalizeOrders = async () => {
@@ -582,7 +631,12 @@ export default function ClientOrdersView() {
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</h1>
         <div className="flex flex-wrap gap-2">
           <ActionButton icon={Import} label="Import" onClick={() => router.push("/orders/import")} />
-          <ActionButton icon={FileText} label="Loadsheet" />
+          <ActionButton
+            icon={FileText}
+            label={creatingLoadsheet ? "Creating…" : "Loadsheet"}
+            onClick={handleCreateLoadsheet}
+            disabled={creatingLoadsheet || loadingOrders || selectedOrderIds.size === 0}
+          />
           <ActionButton
             icon={Printer}
             label={generatingAwb ? "Generating…" : "AWB Print"}
@@ -879,9 +933,10 @@ export default function ClientOrdersView() {
                 pagedOrders.map((order) => (
                   <tr
                     key={order.orderId}
-                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                    onClick={() => handleOpenOrderDetail(order.orderId)}
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer"
                   >
-                    <td className="p-4">
+                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedOrderIds.has(order.orderId)}
@@ -915,6 +970,15 @@ export default function ClientOrdersView() {
           onPageChange={setPage}
         />
       </div>
+
+      <OrderDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        orderId={detailOrderId}
+        token={token}
+        role={role}
+        userId={clientId}
+      />
     </div>
   );
 }

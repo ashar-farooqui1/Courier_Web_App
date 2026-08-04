@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
+import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
@@ -201,11 +202,14 @@ export default function AdminOrdersView() {
   const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
+  const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [retryingDispatch, setRetryingDispatch] = useState(false);
   const [deletingOrders, setDeletingOrders] = useState(false);
+  const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleModal = (key: string, val: boolean) => {
@@ -527,10 +531,9 @@ export default function AdminOrdersView() {
     try {
       const response = await fetch("/api/orders/update-status", {
         method: "PUT",
-        headers: {
+        headers: buildAppAuthHeaders(token, role, user?.userId ?? 0, {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        }),
         body: JSON.stringify({ orderIds, status: selectedStatus }),
       });
 
@@ -618,6 +621,47 @@ export default function AdminOrdersView() {
     }
   };
 
+  const handleCreateLoadsheet = async () => {
+    if (!token) {
+      setActionError("Authentication required. Please log in again.");
+      return;
+    }
+
+    const orderIds = Array.from(selectedOrderIds);
+    if (orderIds.length === 0) {
+      setActionError("Please select at least one order to create a loadsheet.");
+      return;
+    }
+
+    setCreatingLoadsheet(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      const response = await fetch("/api/loadsheets", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderIds }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? `Failed to create loadsheet (${response.status})`);
+      }
+
+      setSuccessMessage(payload?.message ?? "Loadsheet created successfully.");
+      setSelectedOrderIds(new Set());
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to create loadsheet");
+    } finally {
+      setCreatingLoadsheet(false);
+    }
+  };
+
   const handleRetryDispatch = async () => {
     if (!token) {
       setActionError("Authentication required. Please log in again.");
@@ -667,6 +711,11 @@ export default function AdminOrdersView() {
   const handleOrderCreated = (message: string) => {
     setSuccessMessage(message);
     loadOrders();
+  };
+
+  const handleOpenOrderDetail = (orderId: number) => {
+    setDetailOrderId(orderId);
+    setDetailModalOpen(true);
   };
 
   const handleOpenDeleteModal = () => {
@@ -746,7 +795,12 @@ export default function AdminOrdersView() {
           <ActionButton icon={UserPlus} label="Assign Rider" />
           <ActionButton icon={FileBox} label="Rollcart" />
           <ActionButton icon={Scale} label="Re-Weight" />
-          <ActionButton icon={FileText} label="Loadsheet" />
+          <ActionButton
+            icon={FileText}
+            label={creatingLoadsheet ? "Creating…" : "Loadsheet"}
+            onClick={handleCreateLoadsheet}
+            disabled={creatingLoadsheet || loadingOrders || selectedOrderIds.size === 0}
+          />
           <ActionButton
             icon={Printer}
             label={generatingAwb ? "Generating…" : "AWB Print"}
@@ -1244,9 +1298,10 @@ export default function AdminOrdersView() {
                 pagedOrders.map((order) => (
                   <tr
                     key={order.orderId}
-                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
+                    onClick={() => handleOpenOrderDetail(order.orderId)}
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer"
                   >
-                    <td className="p-4">
+                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedOrderIds.has(order.orderId)}
@@ -1277,6 +1332,15 @@ export default function AdminOrdersView() {
           onPageChange={setPage}
         />
       </div>
+
+      <OrderDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        orderId={detailOrderId}
+        token={token}
+        role={role}
+        userId={user?.userId ?? 0}
+      />
     </div>
   );
 }

@@ -50,6 +50,7 @@ import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 export interface UpdateOrderStatusPayload {
   orderIds: number[];
   status: OrderStatusApiValue;
+  adminId: number;
 }
 
 export interface UpdateOrderStatusApiResponse {
@@ -82,6 +83,50 @@ export interface ClientOrder {
   dispatchStatus: string;
   /** Live status from the third-party courier's tracking API (e.g. M&P). Not from the backend. */
   courierTrackingStatus: string;
+}
+
+export interface OrderDetailSender {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  area: string;
+  pickupScheduledAt: string;
+}
+
+export interface OrderDetailRecipient {
+  name: string;
+  phone: string;
+  address: string;
+  area: string;
+  deliveredAt: string;
+}
+
+export interface OrderDetailHistoryEvent {
+  time: string;
+  description: string;
+  changedByName: string;
+  changedByEmail: string;
+  changedByRole: string;
+}
+
+export interface OrderDetailHistoryGroup {
+  dateLabel: string;
+  events: OrderDetailHistoryEvent[];
+}
+
+export interface OrderDetail {
+  orderId: number;
+  awbNo: string;
+  clientName: string;
+  amount: number;
+  status: string;
+  quantity: number;
+  weight: number;
+  serviceName: string;
+  sender: OrderDetailSender;
+  recipient: OrderDetailRecipient;
+  history: OrderDetailHistoryGroup[];
 }
 
 export interface BulkUploadShipmentPreview {

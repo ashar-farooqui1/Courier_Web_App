@@ -3,15 +3,32 @@
 import React, { useState, useEffect } from "react";
 import { FileOutput, Trash2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Client } from "@/lib/types/client";
 
-const DocumentFilter = ({ label, placeholder, type = "text", value = "" }: any) => (
+const DocumentFilter = ({
+  label,
+  placeholder,
+  type = "text",
+  value = "",
+  options,
+  onChange,
+}: any) => (
   <div className="flex-1 min-w-[200px] space-y-1.5">
     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
     <div className="relative">
       {type === "select" ? (
         <div className="relative">
-          <select className="w-full h-12 px-4 bg-white border border-slate-200 rounded-lg text-xs font-bold text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all">
+          <select
+            value={value}
+            onChange={onChange}
+            className="w-full h-12 px-4 bg-white border border-slate-200 rounded-lg text-xs font-bold text-primary appearance-none focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all"
+          >
             <option value="">{placeholder}</option>
+            {options?.map((option: { value: string; label: string }) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
         </div>
@@ -30,6 +47,15 @@ const DocumentFilter = ({ label, placeholder, type = "text", value = "" }: any) 
 export default function AdminLoadsheetDocumentView() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+
+  useEffect(() => {
+    fetch("/api/clients")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setClients(Array.isArray(data) ? data : []))
+      .catch(() => setClients([]));
+  }, []);
 
   const tableHeaders = [
     "AWB ID",
@@ -59,7 +85,14 @@ export default function AdminLoadsheetDocumentView() {
       <div className="bg-white p-8 rounded-xl border border-slate-100 shadow-sm space-y-8">
         <div className="flex flex-wrap items-end gap-6">
           <DocumentFilter label="AWB ID" placeholder="Enter AWB ID" />
-          <DocumentFilter label="Client Name" placeholder="Select Name" type="select" />
+          <DocumentFilter
+            label="Client Name"
+            placeholder="Select Name"
+            type="select"
+            value={selectedClientId}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedClientId(e.target.value)}
+            options={clients.map((client) => ({ value: String(client.clientId), label: client.clientName }))}
+          />
           <DocumentFilter label="Date (From)" type="date" />
           <DocumentFilter label="Date (To)" type="date" />
 

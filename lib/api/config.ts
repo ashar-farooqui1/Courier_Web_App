@@ -35,6 +35,7 @@ export const API_ROUTES = {
 
   orderPickupLocation: (pickupLocationId: number | string) =>
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
+  orderById: (orderId: number | string) => `/api/Order/GetOrderById?orderId=${orderId}`,
   createOrder: "/api/Order/CreateOrder",
   orders: "/api/Order/GetOrders",
   /** Admin: all orders, optionally filtered by clientId. */
@@ -74,4 +75,14 @@ export const API_ROUTES = {
   riderById: (riderId: number | string) => `/api/Rider/${riderId}`,
 
   warehouses: "/api/Warehouse/GetWarehouses",
+
+  loadsheets: (clientId?: number | string) =>
+    clientId ? `/api/Order/GetLoadsheets?clientId=${clientId}` : `/api/Order/GetLoadsheets`,
+  loadsheetById: (loadsheetId: number | string) =>
+    `/api/Order/GetLoadsheet?loadsheetId=${loadsheetId}`,
+  createLoadsheet: "/api/Order/CreateLoadsheet",
+  addOrdersToLoadsheet: "/api/Order/AddOrdersToLoadsheet",
+  removeOrdersFromLoadsheet: "/api/Order/RemoveOrdersFromLoadsheet",
+  generateLoadsheetPdf: (loadsheetId: number | string) =>
+    `/api/Order/GenerateLoadsheetPdf?loadsheetId=${loadsheetId}`,
 } as const;
