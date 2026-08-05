@@ -266,8 +266,8 @@ export function OrderDetailModal({
                 </SectionCard>
               </div>
 
-              <div className="space-y-6">
-                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5 lg:sticky lg:top-0 h-fit">
+              <div className="space-y-6 lg:sticky lg:top-0 h-fit">
+                <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
                       <Clock size={14} />
