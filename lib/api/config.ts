@@ -37,14 +37,16 @@ export const API_ROUTES = {
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
   orderById: (orderId: number | string) => `/api/Order/GetOrderById?orderId=${orderId}`,
   createOrder: "/api/Order/CreateOrder",
+  /** No clientId filter support on the backend — always returns every order. */
   orders: "/api/Order/GetOrders",
-  /** Admin: all orders, optionally filtered by clientId. */
-  ordersByClient: (clientId: number | string) =>
-    `/api/Order/GetOrders?clientId=${clientId}`,
-  /** Client: only this client's own orders. */
+  /** Only endpoint that actually filters by client. Used for both the client role and admin per-client views. */
   ordersForClient: (clientId: number | string) =>
     `/api/Order/GetOrdersByClient?clientId=${clientId}`,
+  /** Orders eligible to be added to a loadsheet — excludes orders already in one. */
+  ordersNotInLoadsheet: (clientId: number | string) =>
+    `/api/Order/GetOrdersNotInLoadsheet?clientId=${clientId}`,
   updateOrderStatus: "/api/Order/UpdateOrderStatus",
+  addOrderRemark: "/api/Order/AddOrderRemark",
   bulkUploadOrders: "/api/Order/BulkUpload",
   generateAwb: "/api/Order/generate-awb",
   deleteOrders: "/api/Order/DeleteOrders",

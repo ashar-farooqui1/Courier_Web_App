@@ -83,7 +83,7 @@ function OrderPickerDialog({
     setLoadingOrders(true);
     setOrdersError(null);
 
-    fetch(`/api/orders?clientId=${clientId}`, {
+    fetch(`/api/loadsheets/available-orders?clientId=${clientId}`, {
       headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
     })
       .then(async (response) => {

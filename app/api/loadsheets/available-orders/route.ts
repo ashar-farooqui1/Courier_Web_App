@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getOrders, getOrdersByClient } from '@/lib/api/order';
-import { getMnpBulkTracking } from '@/lib/api/mnp';
+import { getOrdersNotInLoadsheet } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { readAppRequestContext, resolveOrdersClientId } from '@/lib/api/app-request-context';
-import type { MnpTrackingDetail } from '@/lib/types/mnp';
-
-const MNP_COURIER_NAME = 'M&P';
 
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get('Authorization');
@@ -15,10 +11,7 @@ function getBearerToken(request: Request): string | undefined {
   return token || undefined;
 }
 
-/**
- * Fetches this app's orders, keeps only those booked via the M&P third-party
- * courier, and looks up their live status from M&P's Bulk_Consignment_Tracking_New API.
- */
+/** Proxies GET /api/Order/GetOrdersNotInLoadsheet?clientId= — orders eligible to add to a loadsheet. */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
 
@@ -31,8 +24,10 @@ export async function GET(request: Request) {
   const clientId = clientIdParam ? Number(clientIdParam) : undefined;
 
   if (
-    clientIdParam &&
-    (clientId === undefined || !Number.isInteger(clientId) || clientId < 1)
+    !clientIdParam ||
+    clientId === undefined ||
+    !Number.isInteger(clientId) ||
+    clientId < 1
   ) {
     return NextResponse.json({ message: 'Invalid client ID' }, { status: 400 });
   }
@@ -44,28 +39,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: scoped.error }, { status: scoped.status ?? 403 });
   }
 
+  if (!scoped.clientId) {
+    return NextResponse.json({ message: 'Invalid client ID' }, { status: 400 });
+  }
+
   try {
-    const orders = scoped.clientId
-      ? await getOrdersByClient(scoped.clientId, token)
-      : await getOrders(token);
-
-    const consignments = Array.from(
-      new Set(
-        orders
-          .filter((order) => order.courierName.trim().toUpperCase() === MNP_COURIER_NAME)
-          .map((order) => order.courierTrackingNo.trim())
-          .filter(Boolean)
-      )
-    );
-
-    if (consignments.length === 0) {
-      return NextResponse.json({ tracking_Details: [] as MnpTrackingDetail[] });
-    }
-
-    const results = await getMnpBulkTracking(consignments);
-    const tracking_Details = results.flatMap((result) => result.tracking_Details ?? []);
-
-    return NextResponse.json({ tracking_Details });
+    const orders = await getOrdersNotInLoadsheet(scoped.clientId, token);
+    return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {
       return NextResponse.json(
@@ -73,7 +53,7 @@ export async function GET(request: Request) {
         { status: error.status }
       );
     }
-    const message = error instanceof Error ? error.message : 'Failed to fetch M&P tracking';
+    const message = error instanceof Error ? error.message : 'Failed to fetch available orders';
     return NextResponse.json({ message: parseApiErrorMessage(message, message) }, { status: 500 });
   }
 }

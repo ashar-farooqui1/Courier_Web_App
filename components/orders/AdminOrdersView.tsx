@@ -20,6 +20,7 @@ import {
   RefreshCw,
   ChevronDown,
   Check,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
@@ -31,6 +32,7 @@ import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
+import { exportOrdersToExcel } from "@/lib/orders/order-export";
 import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import type { Client } from "@/lib/types/client";
@@ -210,6 +212,7 @@ export default function AdminOrdersView() {
   const [retryingDispatch, setRetryingDispatch] = useState(false);
   const [deletingOrders, setDeletingOrders] = useState(false);
   const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
+  const [exportingOrders, setExportingOrders] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleModal = (key: string, val: boolean) => {
@@ -621,6 +624,31 @@ export default function AdminOrdersView() {
     }
   };
 
+  const handleExportOrders = async () => {
+    const selectedOrders = orders.filter((order) => selectedOrderIds.has(order.orderId));
+    if (selectedOrders.length === 0) {
+      setActionError("Please select at least one order to export.");
+      return;
+    }
+
+    setExportingOrders(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      await exportOrdersToExcel(selectedOrders, `orders-export-${selectedOrders.length}.xlsx`);
+      setSuccessMessage(
+        selectedOrders.length === 1
+          ? "Order exported successfully."
+          : `${selectedOrders.length} orders exported successfully.`
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to export orders");
+    } finally {
+      setExportingOrders(false);
+    }
+  };
+
   const handleCreateLoadsheet = async () => {
     if (!token) {
       setActionError("Authentication required. Please log in again.");
@@ -791,6 +819,12 @@ export default function AdminOrdersView() {
             label="Delete"
             onClick={handleOpenDeleteModal}
             disabled={selectedOrderIds.size === 0}
+          />
+          <ActionButton
+            icon={Download}
+            label={exportingOrders ? "Exporting…" : "Export"}
+            onClick={handleExportOrders}
+            disabled={exportingOrders || loadingOrders || selectedOrderIds.size === 0}
           />
           <ActionButton icon={UserPlus} label="Assign Rider" />
           <ActionButton icon={FileBox} label="Rollcart" />
@@ -1340,6 +1374,7 @@ export default function AdminOrdersView() {
         token={token}
         role={role}
         userId={user?.userId ?? 0}
+        roleId={user?.roleId ?? 0}
       />
     </div>
   );

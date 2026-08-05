@@ -35,7 +35,7 @@ export const ORDER_COLUMNS: {
     cellClassName: "font-bold text-primary",
     render: (order) => order.awbNo || "—",
   },
-  { label: "Client Name", render: (order) => order.clientName || "—" },
+  { label: "Brand Name", render: (order) => order.clientName || "—" },
   { label: "Customer Name", render: (order) => order.customerName || "—" },
   { label: "Customer Phone", render: (order) => order.customerPhone || "—" },
   { label: "Amount", render: (order) => formatAmount(order.amount) },

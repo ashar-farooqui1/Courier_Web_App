@@ -3,6 +3,7 @@ import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { parseContentDispositionFilename } from '@/lib/format';
 import type {
+  AddOrderRemarkPayload,
   BulkUploadApiResponse,
   BulkUploadShipmentPreview,
   BulkUploadStats,
@@ -13,6 +14,7 @@ import type {
   OrderDetailHistoryEvent,
   OrderDetailHistoryGroup,
   OrderDetailRecipient,
+  OrderDetailRemark,
   OrderDetailSender,
   OrderPickupLocationDetails,
   UpdateOrderStatusApiResponse,
@@ -223,13 +225,6 @@ export function normalizeClientOrder(raw: unknown): ClientOrder | null {
   };
 }
 
-function buildOrdersUrl(clientId?: number): string {
-  if (clientId !== undefined && Number.isInteger(clientId) && clientId > 0) {
-    return API_ROUTES.ordersByClient(clientId);
-  }
-  return API_ROUTES.orders;
-}
-
 export function unwrapOrdersList(payload: unknown): ClientOrder[] {
   if (!payload) return [];
 
@@ -300,9 +295,9 @@ async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientO
   }
 }
 
-/** GET /api/Order/GetOrders (optional ?clientId=) — admin view */
-export async function getOrders(token?: string, clientId?: number): Promise<ClientOrder[]> {
-  return fetchOrdersFromApi(buildOrdersUrl(clientId), token);
+/** GET /api/Order/GetOrders — all orders (admin view, no client filter) */
+export async function getOrders(token?: string): Promise<ClientOrder[]> {
+  return fetchOrdersFromApi(API_ROUTES.orders, token);
 }
 
 /** GET /api/Order/GetOrdersByClient?clientId={clientId} — client's own orders */
@@ -311,6 +306,14 @@ export async function getOrdersByClient(
   token?: string
 ): Promise<ClientOrder[]> {
   return fetchOrdersFromApi(API_ROUTES.ordersForClient(clientId), token);
+}
+
+/** GET /api/Order/GetOrdersNotInLoadsheet?clientId={clientId} — orders available to add to a loadsheet */
+export async function getOrdersNotInLoadsheet(
+  clientId: number,
+  token?: string
+): Promise<ClientOrder[]> {
+  return fetchOrdersFromApi(API_ROUTES.ordersNotInLoadsheet(clientId), token);
 }
 
 function normalizeOrderDetailSender(raw: unknown): OrderDetailSender {
@@ -348,6 +351,55 @@ function normalizeOrderDetailHistoryEvent(raw: unknown): OrderDetailHistoryEvent
   };
 }
 
+/**
+ * Field names are a best-effort guess (the backend hasn't shared a filled-in sample yet) —
+ * covers the likely PascalCase/camelCase variants alongside the AddOrderRemark request field names.
+ */
+function normalizeOrderDetailRemark(raw: unknown): OrderDetailRemark | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const record = raw as Record<string, unknown>;
+  const remark = pickString(record, ['remark', 'Remark', 'remarkText', 'RemarkText', 'text', 'Text']);
+
+  if (!remark) return null;
+
+  return {
+    remarkId: pickNumber(record, ['remarkId', 'RemarkId', 'id', 'Id']),
+    remark,
+    remarkByName: pickString(record, [
+      'remarkByName',
+      'RemarkByName',
+      'remarkBy',
+      'RemarkBy',
+      'changedByName',
+      'ChangedByName',
+      'userName',
+      'UserName',
+      'createdByName',
+      'CreatedByName',
+    ]),
+    remarkByRoleName: pickString(record, [
+      'remarkByRoleName',
+      'RemarkByRoleName',
+      'roleName',
+      'RoleName',
+      'changedByRole',
+      'ChangedByRole',
+    ]),
+    remarkDate: pickString(record, [
+      'remarkDate',
+      'RemarkDate',
+      'createdAt',
+      'CreatedAt',
+      'remarkAt',
+      'RemarkAt',
+      'date',
+      'Date',
+      'time',
+      'Time',
+    ]),
+  };
+}
+
 function normalizeOrderDetailHistoryGroup(raw: unknown): OrderDetailHistoryGroup | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = raw as Record<string, unknown>;
@@ -377,6 +429,12 @@ export function normalizeOrderDetail(raw: unknown): OrderDetail | null {
         .filter((group): group is OrderDetailHistoryGroup => group !== null)
     : [];
 
+  const remarks = Array.isArray(record.remarks ?? record.Remarks)
+    ? ((record.remarks ?? record.Remarks) as unknown[])
+        .map(normalizeOrderDetailRemark)
+        .filter((remark): remark is OrderDetailRemark => remark !== null)
+    : [];
+
   return {
     orderId,
     awbNo: pickString(record, ['awbNo', 'AwbNo']),
@@ -389,6 +447,7 @@ export function normalizeOrderDetail(raw: unknown): OrderDetail | null {
     sender: normalizeOrderDetailSender(record.sender ?? record.Sender),
     recipient: normalizeOrderDetailRecipient(record.recipient ?? record.Recipient),
     history,
+    remarks,
   };
 }
 
@@ -515,6 +574,57 @@ async function parseUpdateOrderStatusResponse(
     if (error instanceof ApiError) throw error;
     if (text === 'true') return 'Order status updated successfully';
     return text || 'Order status updated successfully';
+  }
+}
+
+/** POST /api/Order/AddOrderRemark */
+export async function addOrderRemark(
+  payload: AddOrderRemarkPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.addOrderRemark}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to add remark (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) return 'Remark added successfully';
+
+  try {
+    const parsed = JSON.parse(text) as { success?: boolean; message?: string };
+    if (parsed.success === false) {
+      throw new ApiError(parseApiErrorMessage(parsed, 'Failed to add remark'), response.status, parsed);
+    }
+    return typeof parsed.message === 'string' && parsed.message ? parsed.message : 'Remark added successfully';
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    return 'Remark added successfully';
   }
 }
 

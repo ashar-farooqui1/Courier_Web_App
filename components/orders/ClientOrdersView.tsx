@@ -14,6 +14,7 @@ import {
   Calendar,
   Check,
   RefreshCw,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
@@ -26,6 +27,7 @@ import { parseContentDispositionFilename } from "@/lib/format";
 import type { ClientOrder } from "@/lib/types/order";
 import type { MnpTrackingDetail } from "@/lib/types/mnp";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
+import { exportOrdersToExcel } from "@/lib/orders/order-export";
 import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
@@ -194,7 +196,7 @@ const OrderFilter = ({
 
 export default function ClientOrdersView() {
   const router = useRouter();
-  const { token, clientId, role, ready } = useAuthSession();
+  const { token, clientId, role, ready, user } = useAuthSession();
 
   const [modalStates, setModalStates] = useState({
     addNew: false,
@@ -225,6 +227,7 @@ export default function ClientOrdersView() {
   const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [retryingDispatch, setRetryingDispatch] = useState(false);
+  const [exportingOrders, setExportingOrders] = useState(false);
 
   const toggleModal = (key: keyof typeof modalStates, val: boolean) => {
     setModalStates((prev) => ({ ...prev, [key]: val }));
@@ -488,6 +491,31 @@ export default function ClientOrdersView() {
     }
   };
 
+  const handleExportOrders = async () => {
+    const selectedOrders = orders.filter((order) => selectedOrderIds.has(order.orderId));
+    if (selectedOrders.length === 0) {
+      setActionError("Please select at least one order to export.");
+      return;
+    }
+
+    setExportingOrders(true);
+    setActionError(null);
+    setSuccessMessage(null);
+
+    try {
+      await exportOrdersToExcel(selectedOrders, `orders-export-${selectedOrders.length}.xlsx`);
+      setSuccessMessage(
+        selectedOrders.length === 1
+          ? "Order exported successfully."
+          : `${selectedOrders.length} orders exported successfully.`
+      );
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to export orders");
+    } finally {
+      setExportingOrders(false);
+    }
+  };
+
   const handleCreateLoadsheet = async () => {
     if (!token) {
       setActionError("Client session not found. Please log in again.");
@@ -631,6 +659,12 @@ export default function ClientOrdersView() {
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</h1>
         <div className="flex flex-wrap gap-2">
           <ActionButton icon={Import} label="Import" onClick={() => router.push("/orders/import")} />
+          <ActionButton
+            icon={Download}
+            label={exportingOrders ? "Exporting…" : "Export"}
+            onClick={handleExportOrders}
+            disabled={exportingOrders || loadingOrders || selectedOrderIds.size === 0}
+          />
           <ActionButton
             icon={FileText}
             label={creatingLoadsheet ? "Creating…" : "Loadsheet"}
@@ -978,6 +1012,7 @@ export default function ClientOrdersView() {
         token={token}
         role={role}
         userId={clientId}
+        roleId={user?.roleId ?? 0}
       />
     </div>
   );

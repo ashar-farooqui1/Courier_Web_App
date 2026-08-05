@@ -115,6 +115,14 @@ export interface OrderDetailHistoryGroup {
   events: OrderDetailHistoryEvent[];
 }
 
+export interface OrderDetailRemark {
+  remarkId: number;
+  remark: string;
+  remarkByName: string;
+  remarkByRoleName: string;
+  remarkDate: string;
+}
+
 export interface OrderDetail {
   orderId: number;
   awbNo: string;
@@ -127,6 +135,14 @@ export interface OrderDetail {
   sender: OrderDetailSender;
   recipient: OrderDetailRecipient;
   history: OrderDetailHistoryGroup[];
+  remarks: OrderDetailRemark[];
+}
+
+export interface AddOrderRemarkPayload {
+  orderId: number;
+  remark: string;
+  remarkById: number;
+  remarkByRoleId: number;
 }
 
 export interface BulkUploadShipmentPreview {

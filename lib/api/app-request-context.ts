@@ -2,10 +2,13 @@ import { isClientRole, type LoginRole } from '@/lib/auth/role';
 
 export const APP_ROLE_HEADER = 'X-App-Role';
 export const APP_USER_ID_HEADER = 'X-App-User-Id';
+export const APP_ROLE_ID_HEADER = 'X-App-Role-Id';
 
 export interface AppRequestContext {
   role: LoginRole | null;
   userId: number;
+  /** Backend numeric role id (AuthUser.roleId) — 0 when not sent. */
+  roleId: number;
 }
 
 function isLoginRole(value: string | null): value is LoginRole {
@@ -22,10 +25,12 @@ export function readAppRequestContext(request: Request): AppRequestContext {
   const roleHeader = request.headers.get(APP_ROLE_HEADER);
   const role = isLoginRole(roleHeader) ? roleHeader : null;
   const userId = Number(request.headers.get(APP_USER_ID_HEADER));
+  const roleId = Number(request.headers.get(APP_ROLE_ID_HEADER));
 
   return {
     role,
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
+    roleId: Number.isInteger(roleId) && roleId > 0 ? roleId : 0,
   };
 }
 
@@ -75,7 +80,8 @@ export function buildAppAuthHeaders(
   token: string | undefined,
   role: LoginRole | null,
   userId: number,
-  extra?: Record<string, string>
+  extra?: Record<string, string>,
+  roleId?: number
 ): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -92,6 +98,10 @@ export function buildAppAuthHeaders(
 
   if (Number.isInteger(userId) && userId > 0) {
     headers[APP_USER_ID_HEADER] = String(userId);
+  }
+
+  if (Number.isInteger(roleId) && (roleId as number) > 0) {
+    headers[APP_ROLE_ID_HEADER] = String(roleId);
   }
 
   return headers;

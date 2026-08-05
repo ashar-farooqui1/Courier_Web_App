@@ -6,7 +6,7 @@ import { parseApiErrorMessage } from '@/lib/api/errors';import {
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
-import { isAdminRole, isClientRole } from '@/lib/auth/role';
+import { isAdminRole } from '@/lib/auth/role';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -57,9 +57,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const orders = isClientRole(ctx.role)
-      ? await getOrdersByClient(scoped.clientId as number, token)
-      : await getOrders(token, scoped.clientId);
+    const orders = scoped.clientId
+      ? await getOrdersByClient(scoped.clientId, token)
+      : await getOrders(token);
     return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {
