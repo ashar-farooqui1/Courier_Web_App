@@ -48,3 +48,13 @@ export async function getAllWarehouses(): Promise<Warehouse[]> {
     .map(normalizeWarehouse)
     .filter((warehouse): warehouse is Warehouse => warehouse !== null);
 }
+
+/** GET /api/Admin/GetWarehousesByAdminId — warehouses assigned to a specific admin. */
+export async function getWarehousesByAdminId(adminId: number): Promise<Warehouse[]> {
+  const response = await apiGet<WarehouseApiResponse<unknown[]> | unknown[]>(
+    API_ROUTES.warehousesByAdminId(adminId)
+  );
+  return unwrapWarehouses(response)
+    .map(normalizeWarehouse)
+    .filter((warehouse): warehouse is Warehouse => warehouse !== null);
+}

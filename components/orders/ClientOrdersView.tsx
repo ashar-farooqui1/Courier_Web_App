@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
-import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseApiErrorMessage } from "@/lib/api/errors";
@@ -221,8 +220,6 @@ export default function ClientOrdersView() {
   const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
-  const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
   const [finalizingOrders, setFinalizingOrders] = useState(false);
@@ -603,8 +600,7 @@ export default function ClientOrdersView() {
   };
 
   const handleOpenOrderDetail = (orderId: number) => {
-    setDetailOrderId(orderId);
-    setDetailModalOpen(true);
+    router.push(`/orders/details/${orderId}`);
   };
 
   const handleFinalizeOrders = async () => {
@@ -967,10 +963,9 @@ export default function ClientOrdersView() {
                 pagedOrders.map((order) => (
                   <tr
                     key={order.orderId}
-                    onClick={() => handleOpenOrderDetail(order.orderId)}
-                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
                   >
-                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="p-4">
                       <input
                         type="checkbox"
                         checked={selectedOrderIds.has(order.orderId)}
@@ -987,7 +982,17 @@ export default function ClientOrdersView() {
                           column.cellClassName
                         )}
                       >
-                        {column.render(order)}
+                        {column.label === "AWB No" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenOrderDetail(order.orderId)}
+                            className="hover:underline"
+                          >
+                            {column.render(order)}
+                          </button>
+                        ) : (
+                          column.render(order)
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -1004,16 +1009,6 @@ export default function ClientOrdersView() {
           onPageChange={setPage}
         />
       </div>
-
-      <OrderDetailModal
-        isOpen={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
-        orderId={detailOrderId}
-        token={token}
-        role={role}
-        userId={clientId}
-        roleId={user?.roleId ?? 0}
-      />
     </div>
   );
 }

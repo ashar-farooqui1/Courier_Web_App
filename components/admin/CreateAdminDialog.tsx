@@ -9,6 +9,7 @@ import {
   DialogFormFooter,
 } from "@/components/ui/AppDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
+import type { Warehouse } from "@/lib/types/warehouse";
 
 const ADMIN_ROLE_ID = 2;
 const FORM_ID = "create-admin-form";
@@ -37,6 +38,9 @@ export default function CreateAdminDialog({
   const [adminImage, setAdminImage] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -44,6 +48,24 @@ export default function CreateAdminDialog({
     setAdminImage(null);
     setError(null);
     setSubmitting(false);
+    setSelectedWarehouseIds([]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setLoadingWarehouses(true);
+    fetch("/api/warehouses")
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message ?? `Failed to load warehouses (${response.status})`);
+        }
+        const data: Warehouse[] = await response.json();
+        setWarehouses(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setWarehouses([]))
+      .finally(() => setLoadingWarehouses(false));
   }, [isOpen]);
 
   const setField = (field: keyof AdminFormValues, value: string) => {
@@ -62,6 +84,7 @@ export default function CreateAdminDialog({
     formData.append("AdminEmail", values.adminEmail.trim());
     formData.append("Designation", values.designation.trim());
     formData.append("RoleId", String(ADMIN_ROLE_ID));
+    selectedWarehouseIds.forEach((id) => formData.append("WarehouseIds", String(id)));
     if (adminImage) {
       formData.append("AdminImage", adminImage);
     }
@@ -115,6 +138,11 @@ export default function CreateAdminDialog({
             onChange={setField}
             adminImage={adminImage}
             onImageChange={setAdminImage}
+            showWarehouses
+            warehouses={warehouses}
+            loadingWarehouses={loadingWarehouses}
+            selectedWarehouseIds={selectedWarehouseIds}
+            onWarehouseIdsChange={setSelectedWarehouseIds}
           />
         </DialogBody>
       </form>

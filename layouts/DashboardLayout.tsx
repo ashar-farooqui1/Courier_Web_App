@@ -19,6 +19,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const router = useRouter();
   const { role, user, username, ready } = useAuthSession();
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
+  const [adminWarehouses, setAdminWarehouses] = useState<Warehouse[]>([]);
+  const [loadingAdminWarehouses, setLoadingAdminWarehouses] = useState(false);
+  const [warehouseError, setWarehouseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (ready && !role) {
@@ -27,10 +30,44 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   }, [ready, role, router]);
 
   useEffect(() => {
-    if (ready && isAdminRole(role)) {
-      setShowWarehouseDialog(true);
-    }
-  }, [ready, role]);
+    if (!ready || !isAdminRole(role) || !user?.userId) return;
+
+    let cancelled = false;
+    setLoadingAdminWarehouses(true);
+    setWarehouseError(null);
+
+    fetch(`/api/warehouses/by-admin?adminId=${user.userId}`)
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message ?? `Failed to load warehouses (${response.status})`);
+        }
+        const data: Warehouse[] = await response.json();
+        return Array.isArray(data) ? data : [];
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setAdminWarehouses(data);
+        if (data.length === 1) {
+          saveDefaultWarehouse({ warehouseId: data[0].warehouseId, name: data[0].name });
+          setShowWarehouseDialog(false);
+        } else {
+          setShowWarehouseDialog(true);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setWarehouseError(err instanceof Error ? err.message : "Failed to load warehouses");
+        setShowWarehouseDialog(true);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAdminWarehouses(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, role, user?.userId]);
 
   const handleWarehouseConfirm = (warehouse: Warehouse) => {
     saveDefaultWarehouse({ warehouseId: warehouse.warehouseId, name: warehouse.name });
@@ -61,6 +98,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       <DefaultWarehouseDialog
         isOpen={showWarehouseDialog}
         adminName={displayName}
+        warehouses={adminWarehouses}
+        loading={loadingAdminWarehouses}
+        error={warehouseError}
         onConfirm={handleWarehouseConfirm}
       />
       <AppSidebar />

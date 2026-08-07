@@ -145,6 +145,48 @@ export interface AddOrderRemarkPayload {
   remarkByRoleId: number;
 }
 
+export interface ReweightArrivalPayload {
+  warehouseId: number;
+  pickupRiderId: number;
+  weight: number;
+  awbNo: string[];
+}
+
+export interface CreateDeliverySheetPayload {
+  awbNo: string[];
+  riderId: number;
+  adminId: number;
+  warehouseId: number;
+  deliverySheetDate: string;
+}
+
+export interface RemoveOrderFromDeliverySheetPayload {
+  awbNo: string;
+  deliverySheetId: number;
+}
+
+export interface ReweightScannedOrder {
+  awbNo: string;
+  clientName: string;
+  customerName: string;
+  customerNumber: string;
+  amount: number;
+  referenceId: string;
+  service: string;
+  chargedWeight: number;
+  orderDateTime: string;
+  riderName: string;
+}
+
+export interface ReweightArrivalResult {
+  total: number;
+  updated: number;
+  skipped: number;
+  scannedOrders: ReweightScannedOrder[];
+  alreadyScanned: ReweightScannedOrder[];
+  notFound: string[];
+}
+
 export interface BulkUploadShipmentPreview {
   consigneeName: string;
   consigneeContactNo: string;

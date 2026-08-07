@@ -51,6 +51,10 @@ export const API_ROUTES = {
   generateAwb: "/api/Order/generate-awb",
   deleteOrders: "/api/Order/DeleteOrders",
   retryDispatch: "/api/Order/RetryDispatch",
+  reweightArrival: "/api/Order/ReweightArrival",
+  createDeliverySheet: "/api/Order/CreateDeliverySheet",
+  removeOrderFromDeliverySheet: "/api/Order/RemoveOrderFromDeliverySheet",
+  generateDeliverySheet: "/api/Order/GenerateDeliverySheet",
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",
@@ -77,6 +81,8 @@ export const API_ROUTES = {
   riderById: (riderId: number | string) => `/api/Rider/${riderId}`,
 
   warehouses: "/api/Warehouse/GetWarehouses",
+  warehousesByAdminId: (adminId: number | string) =>
+    `/api/Admin/GetWarehousesByAdminId?adminId=${adminId}`,
 
   loadsheets: (clientId?: number | string) =>
     clientId ? `/api/Order/GetLoadsheets?clientId=${clientId}` : `/api/Order/GetLoadsheets`,

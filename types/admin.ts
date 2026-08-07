@@ -1,3 +1,5 @@
+import type { Warehouse } from "@/lib/types/warehouse";
+
 export interface Admin {
   adminId: number;
   adminName: string;
@@ -8,6 +10,7 @@ export interface Admin {
   adminImage: string | null;
   roleId: number;
   roleName: string;
+  warehouses: Warehouse[];
 }
 
 export interface UpdateAdminPayload {

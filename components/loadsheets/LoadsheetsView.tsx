@@ -22,7 +22,7 @@ import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/Orde
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseContentDispositionFilename } from "@/lib/format";
-import type { ClientOrder } from "@/lib/types/order";
+import { useOrderPicker } from "@/components/loadsheets/useOrderPicker";
 import type { Loadsheet, LoadsheetDetail } from "@/lib/types/loadsheet";
 
 function formatDate(value: string): string {
@@ -57,94 +57,28 @@ function OrderPickerDialog({
   submitLabel,
   onSubmit,
 }: OrderPickerDialogProps) {
-  const { token, role, user } = useAuthSession();
-  const [orders, setOrders] = useState<ClientOrder[]>([]);
-  const [loadingOrders, setLoadingOrders] = useState(false);
-  const [ordersError, setOrdersError] = useState<string | null>(null);
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+
+  const {
+    loadingOrders,
+    ordersError,
+    selectedOrderIds,
+    search,
+    setSearch,
+    scanMessage,
+    setScanMessage,
+    selectableOrders,
+    handleScanSearch,
+    toggleOrder,
+    allSelected,
+    toggleAll,
+  } = useOrderPicker({ isActive: isOpen, clientId, excludeOrderIds });
 
   useEffect(() => {
     if (!isOpen) return;
-    setSelectedOrderIds(new Set());
     setSubmitError(null);
-    setSearch("");
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen || !clientId) {
-      setOrders([]);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadingOrders(true);
-    setOrdersError(null);
-
-    fetch(`/api/loadsheets/available-orders?clientId=${clientId}`, {
-      headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) {
-          const message = payload && !Array.isArray(payload) ? payload.message : undefined;
-          throw new Error(message ?? `Failed to load orders (${response.status})`);
-        }
-        return Array.isArray(payload) ? (payload as ClientOrder[]) : [];
-      })
-      .then((data) => {
-        if (!cancelled) setOrders(data);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setOrders([]);
-          setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingOrders(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, clientId, token, role, user?.userId]);
-
-  const selectableOrders = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return orders.filter((order) => {
-      if (excludeOrderIds?.has(order.orderId)) return false;
-      if (order.status?.toLowerCase() !== "booked") return false;
-      if (!needle) return true;
-      return (
-        order.awbNo?.toLowerCase().includes(needle) ||
-        order.customerName?.toLowerCase().includes(needle) ||
-        order.destinationCity?.toLowerCase().includes(needle)
-      );
-    });
-  }, [orders, excludeOrderIds, search]);
-
-  const toggleOrder = (orderId: number) => {
-    setSelectedOrderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(orderId)) next.delete(orderId);
-      else next.add(orderId);
-      return next;
-    });
-  };
-
-  const allSelected = selectableOrders.length > 0 && selectableOrders.every((o) => selectedOrderIds.has(o.orderId));
-
-  const toggleAll = () => {
-    setSelectedOrderIds((prev) => {
-      if (allSelected) return new Set();
-      const next = new Set(prev);
-      selectableOrders.forEach((o) => next.add(o.orderId));
-      return next;
-    });
-  };
 
   const handleSubmit = async () => {
     if (selectedOrderIds.size === 0) {
@@ -201,11 +135,30 @@ function OrderPickerDialog({
               <input
                 type="text"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search AWB, customer, destination…"
-                className="w-full h-10 pl-9 pr-3 border border-slate-200 rounded text-sm"
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setScanMessage(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleScanSearch();
+                  }
+                }}
+                placeholder="Scan or search AWB, customer, destination…"
+                className="w-full h-10 pl-9 pr-3 border border-slate-200 rounded text-sm text-black"
               />
             </div>
+            {scanMessage && (
+              <p
+                className={cn(
+                  "mt-1.5 text-[11px] font-semibold",
+                  scanMessage.includes("Not found") ? "text-amber-600" : "text-emerald-600"
+                )}
+              >
+                {scanMessage}
+              </p>
+            )}
           </div>
 
           <div className="px-6 py-4">
@@ -235,17 +188,24 @@ function OrderPickerDialog({
                     {selectableOrders.map((order) => (
                       <tr
                         key={order.orderId}
-                        className="border-t border-slate-50 hover:bg-slate-50/50 cursor-pointer"
-                        onClick={() => toggleOrder(order.orderId)}
+                        className="border-t border-slate-50 hover:bg-slate-50/50"
                       >
-                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 py-2">
                           <input
                             type="checkbox"
                             checked={selectedOrderIds.has(order.orderId)}
                             onChange={() => toggleOrder(order.orderId)}
                           />
                         </td>
-                        <td className="px-3 py-2 font-medium text-slate-700">{order.awbNo || "—"}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleOrder(order.orderId)}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {order.awbNo || "—"}
+                          </button>
+                        </td>
                         <td className="px-3 py-2 text-slate-600">{order.customerName || "—"}</td>
                         <td className="px-3 py-2 text-slate-600">{order.destinationCity || "—"}</td>
                         <td className="px-3 py-2 text-slate-600">{order.status || "—"}</td>
@@ -269,9 +229,11 @@ interface LoadsheetsViewProps {
   clientLabel?: string;
   /** Shows a "Back" link above the header when set (admin per-client view). */
   backHref?: string;
+  /** Route to the "Create Loadsheet" page. */
+  createHref: string;
 }
 
-export default function LoadsheetsView({ clientId, clientLabel, backHref }: LoadsheetsViewProps) {
+export default function LoadsheetsView({ clientId, clientLabel, backHref, createHref }: LoadsheetsViewProps) {
   const { token, role, user, ready } = useAuthSession();
 
   const [loadsheets, setLoadsheets] = useState<Loadsheet[]>([]);
@@ -287,7 +249,6 @@ export default function LoadsheetsView({ clientId, clientLabel, backHref }: Load
   const [loadingDetailIds, setLoadingDetailIds] = useState<Set<number>>(() => new Set());
   const [detailErrors, setDetailErrors] = useState<Map<number, string>>(() => new Map());
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [addOrdersTarget, setAddOrdersTarget] = useState<Loadsheet | null>(null);
   const [removeTarget, setRemoveTarget] = useState<{ loadsheetId: number; orderId: number; awbNo: string } | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -375,20 +336,6 @@ export default function LoadsheetsView({ clientId, clientLabel, backHref }: Load
   useEffect(() => {
     setPage(1);
   }, [loadsheets.length]);
-
-  const handleCreateSubmit = async (orderIds: number[]) => {
-    const response = await fetch("/api/loadsheets", {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ orderIds }),
-    });
-    const payload = await response.json().catch(() => null);
-    if (!response.ok || payload?.success === false) {
-      throw new Error(payload?.message ?? "Failed to create loadsheet");
-    }
-    setSuccessMessage(payload?.message ?? "Loadsheet created successfully");
-    await loadLoadsheets();
-  };
 
   const handleAddOrdersSubmit = async (orderIds: number[]) => {
     if (!addOrdersTarget) return;
@@ -487,10 +434,13 @@ export default function LoadsheetsView({ clientId, clientLabel, backHref }: Load
             <RefreshCw size={16} className={cn("mr-2", loading && "animate-spin")} />
             Refresh
           </Button>
-          <Button size="md" onClick={() => setCreateOpen(true)}>
+          <Link
+            href={createHref}
+            className="inline-flex items-center justify-center h-10 px-4 rounded-md font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
             <Plus size={16} className="mr-2" />
             Create Loadsheet
-          </Button>
+          </Link>
         </div>
       </div>
 
@@ -657,15 +607,6 @@ export default function LoadsheetsView({ clientId, clientLabel, backHref }: Load
           <PageSizeSelect pageSize={pageSize} onPageSizeChange={setPageSize} />
         </div>
       </div>
-
-      <OrderPickerDialog
-        isOpen={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="Create Loadsheet"
-        clientId={clientId}
-        submitLabel="Create"
-        onSubmit={handleCreateSubmit}
-      />
 
       <OrderPickerDialog
         isOpen={addOrdersTarget !== null}

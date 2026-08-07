@@ -16,6 +16,7 @@ const TABLE_HEADERS = [
   "Contact #",
   "Admin Email",
   "Designation #",
+  "Warehouses",
   "Admin Image",
   "Action",
 ] as const;
@@ -425,6 +426,11 @@ export default function AdminPage() {
                     <td className="p-4">{admin.contactNumber}</td>
                     <td className="p-4 lowercase">{admin.adminEmail}</td>
                     <td className="p-4">{admin.designation}</td>
+                    <td className="p-4">
+                      {admin.warehouses && admin.warehouses.length > 0
+                        ? admin.warehouses.map((w) => w.name).join(", ")
+                        : "—"}
+                    </td>
                     <td className="p-4">
                       {admin.adminImage ? (
                         <img

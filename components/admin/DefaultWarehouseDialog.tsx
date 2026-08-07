@@ -10,40 +10,25 @@ const selectClass =
 interface DefaultWarehouseDialogProps {
   isOpen: boolean;
   adminName: string;
+  warehouses: Warehouse[];
+  loading?: boolean;
+  error?: string | null;
   onConfirm: (warehouse: Warehouse) => void;
 }
 
 export function DefaultWarehouseDialog({
   isOpen,
   adminName,
+  warehouses,
+  loading = false,
+  error,
   onConfirm,
 }: DefaultWarehouseDialogProps) {
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | "">("");
 
   useEffect(() => {
     if (!isOpen) return;
-
-    setLoading(true);
-    setError(null);
     setSelectedId("");
-
-    fetch("/api/warehouses")
-      .then(async (response) => {
-        if (!response.ok) {
-          const body = await response.json().catch(() => ({}));
-          throw new Error(body.message ?? `Failed to load warehouses (${response.status})`);
-        }
-        const data: Warehouse[] = await response.json();
-        setWarehouses(Array.isArray(data) ? data : []);
-      })
-      .catch((err) => {
-        setWarehouses([]);
-        setError(err instanceof Error ? err.message : "Failed to load warehouses");
-      })
-      .finally(() => setLoading(false));
   }, [isOpen]);
 
   const handleConfirm = () => {
@@ -78,24 +63,30 @@ export function DefaultWarehouseDialog({
       ) : (
         <DialogBody>
           {error && <DialogError message={error} />}
-          <p className="text-sm font-bold text-primary">Please Set Default Warehouse!</p>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Warehouse
-            </label>
-            <select
-              value={selectedId}
-              onChange={(e) => setSelectedId(Number(e.target.value))}
-              className={selectClass}
-            >
-              <option value="">--select--</option>
-              {warehouses.map((warehouse) => (
-                <option key={warehouse.warehouseId} value={warehouse.warehouseId}>
-                  {warehouse.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!error && warehouses.length === 0 ? (
+            <DialogError message="No warehouse is assigned to your account. Please contact an administrator." />
+          ) : (
+            <>
+              <p className="text-sm font-bold text-primary">Please Set Default Warehouse!</p>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Warehouse
+                </label>
+                <select
+                  value={selectedId}
+                  onChange={(e) => setSelectedId(Number(e.target.value))}
+                  className={selectClass}
+                >
+                  <option value="">--select--</option>
+                  {warehouses.map((warehouse) => (
+                    <option key={warehouse.warehouseId} value={warehouse.warehouseId}>
+                      {warehouse.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
         </DialogBody>
       )}
     </AppDialog>

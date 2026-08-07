@@ -1,9 +1,9 @@
 "use client";
 
-import LoadsheetsView from "@/components/loadsheets/LoadsheetsView";
+import CreateLoadsheetView from "@/components/loadsheets/CreateLoadsheetView";
 import { useAuthSession } from "@/hooks/useAuthRole";
 
-export default function ClientLoadsheetsView() {
+export default function ClientCreateLoadsheetView() {
   const { clientId, ready } = useAuthSession();
 
   if (!ready) {
@@ -14,5 +14,5 @@ export default function ClientLoadsheetsView() {
     );
   }
 
-  return <LoadsheetsView clientId={clientId} createHref="/dashboard/loadsheets/create" />;
+  return <CreateLoadsheetView clientId={clientId} backHref="/dashboard/loadsheets" />;
 }

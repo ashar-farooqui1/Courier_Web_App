@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
-import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
@@ -33,7 +32,8 @@ import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import { exportOrdersToExcel } from "@/lib/orders/order-export";
-import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
+import { ORDER_STATUS_OPTIONS, normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
+import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import type { Client } from "@/lib/types/client";
 import type { ClientOrder } from "@/lib/types/order";
@@ -168,6 +168,74 @@ const OrderFilter = ({
   </div>
 );
 
+const StatusMultiSelectFilter = ({
+  label,
+  options,
+  selected,
+  onToggle,
+}: {
+  label: string;
+  options: ReadonlyArray<{ label: string; value: OrderStatusApiValue }>;
+  selected: OrderStatusApiValue[];
+  onToggle: (value: OrderStatusApiValue) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const summary =
+    selected.length === 0
+      ? "Select Status"
+      : selected.length === 1
+      ? options.find((opt) => opt.value === selected[0])?.label ?? "1 selected"
+      : `${selected.length} selected`;
+
+  return (
+    <div className="space-y-1" ref={containerRef}>
+      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 flex items-center justify-between focus:outline-none focus:ring-1 focus:ring-primary/20"
+        >
+          <span className={cn("truncate text-left", selected.length === 0 && "text-slate-400 font-normal")}>
+            {summary}
+          </span>
+          <ChevronDown className="text-slate-400 shrink-0" size={12} />
+        </button>
+        {open && (
+          <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto bg-white border border-slate-200 rounded shadow-lg">
+            {options.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt.value)}
+                  onChange={() => onToggle(opt.value)}
+                  className="accent-primary"
+                />
+                {opt.label}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function AdminOrdersView() {
   const { token, ready, role, user } = useAuthSession();
   const router = useRouter();
@@ -200,12 +268,11 @@ export default function AdminOrdersView() {
     assignDateTo: "",
     rider: "",
     trackingNumbers: "",
+    status: [] as OrderStatusApiValue[],
   };
   const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
-  const [detailOrderId, setDetailOrderId] = useState<number | null>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);
   const [generatingAwb, setGeneratingAwb] = useState(false);
@@ -352,6 +419,15 @@ export default function AdminOrdersView() {
     setFilterDraft((prev) => ({ ...prev, [key]: value }));
   };
 
+  const toggleStatusFilter = (value: OrderStatusApiValue) => {
+    setFilterDraft((prev) => ({
+      ...prev,
+      status: prev.status.includes(value)
+        ? prev.status.filter((status) => status !== value)
+        : [...prev.status, value],
+    }));
+  };
+
   const handleSearch = () => {
     setAppliedFilters(filterDraft);
   };
@@ -439,6 +515,10 @@ export default function AdminOrdersView() {
       )
         return false;
       if (appliedFilters.rider && order.riderName !== appliedFilters.rider) return false;
+      if (appliedFilters.status.length > 0) {
+        const normalizedStatus = normalizeOrderStatusValue(order.status);
+        if (!normalizedStatus || !appliedFilters.status.includes(normalizedStatus)) return false;
+      }
       if (!isWithinDateRange(order.orderDate, "", appliedFilters.dateTo)) return false;
       if (!isWithinDateRange(order.orderDate, appliedFilters.assignDateFrom, appliedFilters.assignDateTo))
         return false;
@@ -742,8 +822,7 @@ export default function AdminOrdersView() {
   };
 
   const handleOpenOrderDetail = (orderId: number) => {
-    setDetailOrderId(orderId);
-    setDetailModalOpen(true);
+    router.push(`/orders/details/${orderId}`);
   };
 
   const handleOpenDeleteModal = () => {
@@ -1166,6 +1245,12 @@ export default function AdminOrdersView() {
             value={filterDraft.rider}
             onChange={(e) => updateFilterDraft("rider", e.target.value)}
           />
+          <StatusMultiSelectFilter
+            label="Status"
+            options={ORDER_STATUS_OPTIONS}
+            selected={filterDraft.status}
+            onToggle={toggleStatusFilter}
+          />
           <div className="md:col-span-3 pt-2 flex gap-3">
             <Button type="submit" className="flex-1 h-10 font-bold bg-primary text-white shadow-md">
               Search
@@ -1332,10 +1417,9 @@ export default function AdminOrdersView() {
                 pagedOrders.map((order) => (
                   <tr
                     key={order.orderId}
-                    onClick={() => handleOpenOrderDetail(order.orderId)}
-                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer"
+                    className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors"
                   >
-                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                    <td className="p-4">
                       <input
                         type="checkbox"
                         checked={selectedOrderIds.has(order.orderId)}
@@ -1349,7 +1433,17 @@ export default function AdminOrdersView() {
                         key={column.label}
                         className={cn("p-4 whitespace-nowrap", column.cellClassName)}
                       >
-                        {column.render(order)}
+                        {column.label === "AWB No" ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenOrderDetail(order.orderId)}
+                            className="hover:underline"
+                          >
+                            {column.render(order)}
+                          </button>
+                        ) : (
+                          column.render(order)
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -1366,16 +1460,6 @@ export default function AdminOrdersView() {
           onPageChange={setPage}
         />
       </div>
-
-      <OrderDetailModal
-        isOpen={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
-        orderId={detailOrderId}
-        token={token}
-        role={role}
-        userId={user?.userId ?? 0}
-        roleId={user?.roleId ?? 0}
-      />
     </div>
   );
 }

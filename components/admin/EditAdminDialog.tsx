@@ -11,6 +11,7 @@ import {
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { Admin } from "@/types/admin";
 import type { Role } from "@/types/role";
+import type { Warehouse } from "@/lib/types/warehouse";
 
 interface EditAdminDialogProps {
   admin: Admin | null;
@@ -33,6 +34,9 @@ export default function EditAdminDialog({
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (!isOpen || !admin) return;
@@ -47,6 +51,7 @@ export default function EditAdminDialog({
     });
     setAdminImage(null);
     setError(null);
+    setSelectedWarehouseIds((admin.warehouses ?? []).map((w) => w.warehouseId));
   }, [isOpen, admin]);
 
   useEffect(() => {
@@ -69,6 +74,23 @@ export default function EditAdminDialog({
     loadRoles();
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setLoadingWarehouses(true);
+    fetch("/api/warehouses")
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(body.message ?? `Failed to load warehouses (${response.status})`);
+        }
+        const data: Warehouse[] = await response.json();
+        setWarehouses(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setWarehouses([]))
+      .finally(() => setLoadingWarehouses(false));
+  }, [isOpen]);
+
   const setField = (field: keyof AdminFormValues, value: string) => {
     setValues((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
@@ -87,6 +109,7 @@ export default function EditAdminDialog({
     formData.append("AdminEmail", values.adminEmail.trim());
     formData.append("Designation", values.designation.trim());
     formData.append("RoleId", values.roleId);
+    selectedWarehouseIds.forEach((id) => formData.append("WarehouseIds", String(id)));
     if (adminImage) {
       formData.append("AdminImage", adminImage);
     }
@@ -154,6 +177,11 @@ export default function EditAdminDialog({
               loadingRoles={loadingRoles}
               existingImageUrl={admin.adminImage}
               existingImageAlt={admin.adminName}
+              showWarehouses
+              warehouses={warehouses}
+              loadingWarehouses={loadingWarehouses}
+              selectedWarehouseIds={selectedWarehouseIds}
+              onWarehouseIdsChange={setSelectedWarehouseIds}
             />
           </DialogBody>
         </form>

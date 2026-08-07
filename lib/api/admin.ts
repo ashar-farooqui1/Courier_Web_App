@@ -18,13 +18,18 @@ function unwrapAdmins(response: AdminsApiResponse | Admin[]): Admin[] {
   return Array.isArray(response.data) ? response.data : [];
 }
 
+function normalizeAdmin(admin: Admin): Admin {
+  return { ...admin, warehouses: Array.isArray(admin.warehouses) ? admin.warehouses : [] };
+}
+
 export async function getAllAdmins(): Promise<Admin[]> {
   const response = await apiGet<AdminsApiResponse | Admin[]>(API_ROUTES.admins);
-  return unwrapAdmins(response);
+  return unwrapAdmins(response).map(normalizeAdmin);
 }
 
 export async function getAdminById(adminId: number): Promise<Admin> {
-  return apiGet<Admin>(API_ROUTES.adminById(adminId));
+  const admin = await apiGet<Admin>(API_ROUTES.adminById(adminId));
+  return normalizeAdmin(admin);
 }
 
 function buildAdminFormData(payload: UpdateAdminPayload): FormData {

@@ -16,7 +16,11 @@ import type {
   OrderDetailRecipient,
   OrderDetailRemark,
   OrderDetailSender,
+  CreateDeliverySheetPayload,
   OrderPickupLocationDetails,
+  RemoveOrderFromDeliverySheetPayload,
+  ReweightArrivalPayload,
+  ReweightArrivalResult,
   UpdateOrderStatusApiResponse,
   UpdateOrderStatusPayload,
 } from '@/lib/types/order';
@@ -758,6 +762,213 @@ export async function retryDispatchOrders(orderIds: number[], token?: string): P
   });
 
   return parseRetryDispatchResponse(response, 'Failed to retry dispatch');
+}
+
+interface ReweightArrivalApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: Partial<ReweightArrivalResult> | null;
+  details?: unknown;
+}
+
+/** POST /api/Order/ReweightArrival */
+export async function reweightArrival(
+  payload: ReweightArrivalPayload,
+  token?: string
+): Promise<{ message: string; result: ReweightArrivalResult }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.reweightArrival}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: ReweightArrivalApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as ReweightArrivalApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to reweight arrival (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const data = body.data ?? {};
+
+  return {
+    message: body.message ?? 'Order(s) reweighed successfully',
+    result: {
+      total: Number(data.total) || 0,
+      updated: Number(data.updated) || 0,
+      skipped: Number(data.skipped) || 0,
+      scannedOrders: Array.isArray(data.scannedOrders) ? data.scannedOrders : [],
+      alreadyScanned: Array.isArray(data.alreadyScanned) ? data.alreadyScanned : [],
+      notFound: Array.isArray(data.notFound) ? data.notFound : [],
+    },
+  };
+}
+
+interface CreateDeliverySheetApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/**
+ * POST /api/Order/CreateDeliverySheet. Backend response shape for `data` isn't confirmed
+ * yet, so it's returned as-is for the caller to interpret defensively.
+ */
+export async function createDeliverySheet(
+  payload: CreateDeliverySheetPayload,
+  token?: string
+): Promise<{ message: string; data: unknown }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.createDeliverySheet}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: CreateDeliverySheetApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as CreateDeliverySheetApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to create delivery sheet (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return {
+    message: body.message ?? 'Delivery sheet created successfully',
+    data: body.data,
+  };
+}
+
+interface RemoveOrderFromDeliverySheetApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/** POST /api/Order/RemoveOrderFromDeliverySheet */
+export async function removeOrderFromDeliverySheet(
+  payload: RemoveOrderFromDeliverySheetPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.removeOrderFromDeliverySheet}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: RemoveOrderFromDeliverySheetApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as RemoveOrderFromDeliverySheetApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to remove order from delivery sheet (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return body.message ?? 'Order removed from delivery sheet';
+}
+
+/** POST /api/Order/GenerateDeliverySheet — returns the delivery sheet file for the given orders. */
+export async function generateDeliverySheet(
+  payload: CreateDeliverySheetPayload,
+  token?: string
+): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: '*/*',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.generateDeliverySheet}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get('Content-Type') ?? '';
+    let body: unknown;
+
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => undefined);
+    } else {
+      body = await response.text().catch(() => undefined);
+    }
+
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to generate delivery sheet (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: parseContentDispositionFilename(
+      response.headers.get('Content-Disposition'),
+      'DeliverySheet.pdf'
+    ),
+  };
 }
 
 function pickValue(record: Record<string, unknown>, keys: string[]): string | number {

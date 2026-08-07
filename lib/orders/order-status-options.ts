@@ -67,6 +67,21 @@ export function getOrderStatusLabel(value: OrderStatusApiValue): string {
   return ORDER_STATUS_LABEL_BY_VALUE.get(value) ?? value;
 }
 
+/** Resolves API / legacy numeric status values to the canonical enum value, for filtering/matching. */
+export function normalizeOrderStatusValue(status: string | null | undefined): OrderStatusApiValue | null {
+  const raw = status?.trim();
+  if (!raw) return null;
+
+  if (isOrderStatusApiValue(raw)) return raw;
+
+  const numeric = Number(raw);
+  if (Number.isInteger(numeric) && numeric >= 0 && numeric < ORDER_STATUS_API_VALUES.length) {
+    return ORDER_STATUS_API_VALUES[numeric];
+  }
+
+  return null;
+}
+
 /** Formats API / legacy numeric status values for display in the UI. */
 export function formatOrderStatusLabel(status: string | null | undefined): string {
   const raw = status?.trim();

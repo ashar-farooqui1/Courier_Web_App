@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import LoadsheetsView from "@/components/loadsheets/LoadsheetsView";
+import CreateLoadsheetView from "@/components/loadsheets/CreateLoadsheetView";
 import type { Client } from "@/lib/types/client";
 
-interface AdminLoadsheetsViewProps {
+interface AdminCreateLoadsheetViewProps {
   clientId: number;
 }
 
-export default function AdminLoadsheetsView({ clientId }: AdminLoadsheetsViewProps) {
+export default function AdminCreateLoadsheetView({ clientId }: AdminCreateLoadsheetViewProps) {
   const [client, setClient] = useState<Client | null>(null);
 
   useEffect(() => {
@@ -29,11 +29,10 @@ export default function AdminLoadsheetsView({ clientId }: AdminLoadsheetsViewPro
   const clientLabel = client ? `${client.clientName} (#${clientId})` : `Client #${clientId}`;
 
   return (
-    <LoadsheetsView
+    <CreateLoadsheetView
       clientId={clientId}
       clientLabel={clientLabel}
-      backHref="/dashboard/loadsheets"
-      createHref={`/dashboard/loadsheets/${clientId}/create`}
+      backHref={`/dashboard/loadsheets/${clientId}`}
     />
   );
 }
