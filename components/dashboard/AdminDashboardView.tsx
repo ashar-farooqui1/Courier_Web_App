@@ -1,8 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
-import { cn } from "@/lib/utils";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, Calendar, Download } from "lucide-react";
+import { useAuthSession } from "@/hooks/useAuthRole";
+import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { parseApiErrorMessage } from "@/lib/api/errors";
+import { unwrapOrdersList } from "@/lib/api/order";
+import { computeDashboardStatusCounts } from "@/lib/orders/dashboard-status-buckets";
+import type { ClientOrder } from "@/lib/types/order";
+import ShipmentFinancialSummary from "@/components/dashboard/ShipmentFinancialSummary";
+import DashboardHeroBanner from "@/components/dashboard/DashboardHeroBanner";
+import DashboardStatusTabs from "@/components/dashboard/DashboardStatusTabs";
 
 const FilterField = ({
   label,
@@ -43,47 +51,55 @@ const SelectField = ({ label, placeholder }: { label: string; placeholder: strin
   </div>
 );
 
-const StatusCard = ({
-  label,
-  value,
-  colorClass,
-  active,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  colorClass: string;
-  active: boolean;
-  onClick: () => void;
-}) => (
-  <div
-    onClick={onClick}
-    className={cn(
-      "flex flex-col items-center justify-center p-6 rounded-lg text-white shadow-lg transition-all duration-300 hover:scale-[1.02] cursor-pointer min-h-[120px]",
-      colorClass,
-      active && "ring-4 ring-primary ring-offset-2 scale-[1.05] z-10"
-    )}
-  >
-    <span className="text-xs font-bold uppercase tracking-widest mb-2 opacity-90">{label}</span>
-    <span className="text-4xl font-black">{value}</span>
-  </div>
-);
-
 export default function AdminDashboardView() {
+  const { token, role, user, username, ready } = useAuthSession();
+
+  const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
+  const loadOrders = useCallback(async () => {
+    if (!ready || !token) return;
+
+    setOrdersError(null);
+
+    try {
+      const response = await fetch("/api/orders", {
+        headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(parseApiErrorMessage(payload, `Failed to load orders (${response.status})`));
+      }
+
+      setOrders(unwrapOrdersList(payload));
+    } catch (err) {
+      setOrders([]);
+      setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
+    }
+  }, [ready, token, role, user]);
+
+  useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
   const [selectedStatus, setSelectedStatus] = useState<string | null>("Booking");
 
-  const stats = [
-    { label: "Total", value: 0, color: "bg-slate-500" },
-    { label: "Booking", value: 0, color: "bg-yellow-400" },
-    { label: "Picked", value: 0, color: "bg-[#002B5B]" },
-    { label: "In Transit", value: 0, color: "bg-slate-500" },
-    { label: "Out for Delivery", value: 0, color: "bg-blue-500" },
-    { label: "Shipper Advise", value: 0, color: "bg-cyan-500" },
-    { label: "Delivered", value: 0, color: "bg-green-400" },
-    { label: "Return In Transit", value: 0, color: "bg-orange-400" },
-    { label: "Returned", value: 0, color: "bg-slate-700" },
-    { label: "Payment Settled", value: 0, color: "bg-green-600" },
-    { label: "Cancelled", value: 0, color: "bg-red-500" },
+  const statusCounts = useMemo(() => computeDashboardStatusCounts(orders), [orders]);
+
+  const statusTabs = [
+    { label: "Total", value: orders.length },
+    { label: "Booking", value: statusCounts["Booking"] ?? 0 },
+    { label: "Picked", value: statusCounts["Picked"] ?? 0 },
+    { label: "In Transit", value: statusCounts["In Transit"] ?? 0 },
+    { label: "Out for Delivery", value: statusCounts["Out for Delivery"] ?? 0 },
+    { label: "Shipper Advise", value: statusCounts["Shipper Advise"] ?? 0 },
+    { label: "Delivered", value: statusCounts["Delivered"] ?? 0 },
+    { label: "Return In Transit", value: statusCounts["Return In Transit"] ?? 0 },
+    { label: "Returned", value: statusCounts["Returned"] ?? 0 },
+    { label: "Payment Settled", value: 0, disabled: true },
+    { label: "Cancelled", value: statusCounts["Cancelled"] ?? 0 },
   ];
 
   const tableHeaders = [
@@ -106,6 +122,8 @@ export default function AdminDashboardView() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <DashboardHeroBanner greetingName={username} totalOrders={orders.length} />
+
       <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <SelectField label="Filter By" placeholder="Booking Date" />
@@ -119,18 +137,22 @@ export default function AdminDashboardView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-        {stats.map((stat) => (
-          <StatusCard
-            key={stat.label}
-            label={stat.label}
-            value={stat.value}
-            colorClass={stat.color}
-            active={selectedStatus === stat.label}
-            onClick={() => setSelectedStatus(stat.label)}
-          />
-        ))}
-      </div>
+      {ordersError && (
+        <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
+          <span>{ordersError}</span>
+          <button
+            type="button"
+            onClick={loadOrders}
+            className="shrink-0 h-8 px-4 bg-red-600 text-white text-[10px] font-bold rounded uppercase hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      <ShipmentFinancialSummary orders={orders} />
+
+      <DashboardStatusTabs tabs={statusTabs} active={selectedStatus} onChange={setSelectedStatus} />
 
       {selectedStatus && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">

@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { cn } from "@/lib/utils";
 import { Calendar, Download } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
@@ -10,31 +9,14 @@ import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import { formatOrderDate, formatAmount } from "@/components/orders/order-columns";
+import ShipmentFinancialSummary from "@/components/dashboard/ShipmentFinancialSummary";
+import DashboardHeroBanner from "@/components/dashboard/DashboardHeroBanner";
+import DashboardStatusTabs from "@/components/dashboard/DashboardStatusTabs";
 import { PageSizeSelect, OrdersPaginationFooter } from "@/components/orders/OrdersPagination";
 import { formatOrderStatusLabel } from "@/lib/orders/order-status-options";
+import { DASHBOARD_STATUS_BUCKETS, computeDashboardStatusCounts } from "@/lib/orders/dashboard-status-buckets";
 import type { ClientOrder } from "@/lib/types/order";
-import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import type { MnpTrackingDetail } from "@/lib/types/mnp";
-
-/** Groups the backend's granular order-status enum into the dashboard's summary buckets. */
-const STATUS_BUCKETS: Record<string, OrderStatusApiValue[]> = {
-  Booking: ["Draft", "Booked", "Finalize"],
-  Picked: ["PickedUp"],
-  "In Transit": [
-    "ArrivedAtOrigin",
-    "OutForDestination",
-    "ArrivedAtDestination",
-    "RequestForReattempt",
-    "Reattempted",
-    "TransitLost",
-  ],
-  "Out for Delivery": ["OutForDelivery"],
-  "Shipper Advise": ["HaltAdviceSent"],
-  Delivered: ["Delivered"],
-  "Return In Transit": ["ReturnConfirm", "ReturnInTransit", "ReturnOutForDelivery", "ReturnReceivedAtOrigin"],
-  Returned: ["ParcelReturned"],
-  Cancelled: ["Cancelled", "ShipmentLost", "Damage"],
-};
 
 const FilterField = ({
   label,
@@ -68,36 +50,6 @@ const FilterField = ({
         />
       )}
     </div>
-  </div>
-);
-
-const StatusCard = ({
-  label,
-  value,
-  colorClass,
-  active,
-  disabled,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  colorClass: string;
-  active: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-}) => (
-  <div
-    onClick={disabled ? undefined : onClick}
-    className={cn(
-      "flex flex-col items-center justify-center p-6 rounded-lg text-white shadow-lg transition-all duration-300 min-h-[120px]",
-      colorClass,
-      disabled ? "opacity-50 cursor-not-allowed" : "hover:scale-[1.02] cursor-pointer",
-      active && !disabled && "ring-4 ring-primary ring-offset-2 scale-[1.05] z-10"
-    )}
-    title={disabled ? "Not tracked yet" : undefined}
-  >
-    <span className="text-xs font-bold uppercase tracking-widest mb-2 opacity-90">{label}</span>
-    <span className="text-4xl font-black">{value}</span>
   </div>
 );
 
@@ -167,7 +119,7 @@ const DASHBOARD_COLUMNS: DashboardColumn[] = [
 ];
 
 export default function ClientDashboardView() {
-  const { token, clientId, role, ready } = useAuthSession();
+  const { token, clientId, role, ready, username } = useAuthSession();
 
   const [orders, setOrders] = useState<ClientOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -238,34 +190,20 @@ export default function ClientDashboardView() {
     loadOrders();
   }, [loadOrders]);
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const bucket of Object.keys(STATUS_BUCKETS)) counts[bucket] = 0;
+  const statusCounts = useMemo(() => computeDashboardStatusCounts(orders), [orders]);
 
-    orders.forEach((order) => {
-      for (const [bucket, statuses] of Object.entries(STATUS_BUCKETS)) {
-        if ((statuses as string[]).includes(order.status)) {
-          counts[bucket] += 1;
-          break;
-        }
-      }
-    });
-
-    return counts;
-  }, [orders]);
-
-  const stats = [
-    { label: "Total", value: orders.length, color: "bg-slate-500" },
-    { label: "Booking", value: statusCounts["Booking"] ?? 0, color: "bg-yellow-400" },
-    { label: "Picked", value: statusCounts["Picked"] ?? 0, color: "bg-[#002B5B]" },
-    { label: "In Transit", value: statusCounts["In Transit"] ?? 0, color: "bg-slate-500" },
-    { label: "Out for Delivery", value: statusCounts["Out for Delivery"] ?? 0, color: "bg-blue-500" },
-    { label: "Shipper Advise", value: statusCounts["Shipper Advise"] ?? 0, color: "bg-cyan-500" },
-    { label: "Delivered", value: statusCounts["Delivered"] ?? 0, color: "bg-green-400" },
-    { label: "Return In Transit", value: statusCounts["Return In Transit"] ?? 0, color: "bg-orange-400" },
-    { label: "Returned", value: statusCounts["Returned"] ?? 0, color: "bg-slate-700" },
-    { label: "Payment Settled", value: 0, color: "bg-green-600", disabled: true },
-    { label: "Cancelled", value: statusCounts["Cancelled"] ?? 0, color: "bg-red-500" },
+  const statusTabs = [
+    { label: "Total", value: orders.length },
+    { label: "Booking", value: statusCounts["Booking"] ?? 0 },
+    { label: "Picked", value: statusCounts["Picked"] ?? 0 },
+    { label: "In Transit", value: statusCounts["In Transit"] ?? 0 },
+    { label: "Out for Delivery", value: statusCounts["Out for Delivery"] ?? 0 },
+    { label: "Shipper Advise", value: statusCounts["Shipper Advise"] ?? 0 },
+    { label: "Delivered", value: statusCounts["Delivered"] ?? 0 },
+    { label: "Return In Transit", value: statusCounts["Return In Transit"] ?? 0 },
+    { label: "Returned", value: statusCounts["Returned"] ?? 0 },
+    { label: "Payment Settled", value: 0, disabled: true },
+    { label: "Cancelled", value: statusCounts["Cancelled"] ?? 0 },
   ];
 
   const isWithinDateRange = (orderDate: string, from: string, to: string) => {
@@ -290,7 +228,7 @@ export default function ClientDashboardView() {
       if (selectedStatus === "Payment Settled") return false;
 
       if (selectedStatus && selectedStatus !== "Total") {
-        const bucket = STATUS_BUCKETS[selectedStatus];
+        const bucket = DASHBOARD_STATUS_BUCKETS[selectedStatus];
         if (bucket && !(bucket as string[]).includes(order.status)) return false;
       }
 
@@ -327,6 +265,8 @@ export default function ClientDashboardView() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <DashboardHeroBanner greetingName={username} totalOrders={orders.length} />
+
       <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-6">
         <div className="flex flex-wrap gap-4">
           <FilterField
@@ -371,19 +311,9 @@ export default function ClientDashboardView() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
-        {stats.map((stat) => (
-          <StatusCard
-            key={stat.label}
-            label={stat.label}
-            value={stat.value}
-            colorClass={stat.color}
-            active={selectedStatus === stat.label}
-            disabled={stat.disabled}
-            onClick={() => setSelectedStatus(stat.label)}
-          />
-        ))}
-      </div>
+      <ShipmentFinancialSummary orders={orders} />
+
+      <DashboardStatusTabs tabs={statusTabs} active={selectedStatus} onChange={setSelectedStatus} />
 
       {selectedStatus && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-500">

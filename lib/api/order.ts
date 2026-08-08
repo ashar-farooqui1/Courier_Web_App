@@ -24,6 +24,11 @@ import type {
   UpdateOrderStatusApiResponse,
   UpdateOrderStatusPayload,
 } from '@/lib/types/order';
+import type {
+  DeliverySheetDebriefingData,
+  DeliverySheetDebriefingResponse,
+  UpdateOrderDeliveryStatusPayload,
+} from '@/lib/types/debriefing';
 
 function pickString(record: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
@@ -1246,4 +1251,193 @@ export async function generateOrderAwb(
       fallbackName
     ),
   };
+}
+
+/** GET /api/Order/DeliverySheetDebriefing?deliverySheetId= — rollcart id maps to deliverySheetId. */
+export async function getDeliverySheetDebriefing(
+  deliverySheetId: number,
+  token?: string
+): Promise<DeliverySheetDebriefingData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}${API_ROUTES.deliverySheetDebriefing(deliverySheetId)}`,
+    {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    }
+  );
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch debriefing (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as DeliverySheetDebriefingResponse;
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(
+      parseApiErrorMessage(payload, 'Failed to fetch debriefing'),
+      response.status,
+      payload
+    );
+  }
+
+  return payload.data;
+}
+
+interface PickDeliverySheetApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/** POST /api/Order/PickDeliverySheet — assigns all unassigned orders on the delivery sheet to the rider. */
+export async function pickDeliverySheet(deliverySheetId: number, token?: string): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.pickDeliverySheet}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ deliverySheetId }),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: PickDeliverySheetApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as PickDeliverySheetApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to assign delivery sheet (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return body.message ?? 'Delivery sheet assigned';
+}
+
+interface CloseDeliverySheetApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/** POST /api/Order/CloseDeliverySheet */
+export async function closeDeliverySheet(deliverySheetId: number, token?: string): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.closeDeliverySheet}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ deliverySheetId }),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: CloseDeliverySheetApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as CloseDeliverySheetApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to close delivery sheet (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return body.message ?? 'Delivery sheet closed';
+}
+
+interface UpdateOrderDeliveryStatusApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/** POST /api/Order/UpdateOrderDeliveryStatus */
+export async function updateOrderDeliveryStatus(
+  payload: UpdateOrderDeliveryStatusPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.updateOrderDeliveryStatus}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: UpdateOrderDeliveryStatusApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as UpdateOrderDeliveryStatusApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to update order delivery status (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return body.message ?? 'Order delivery status updated';
 }

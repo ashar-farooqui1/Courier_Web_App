@@ -55,6 +55,11 @@ export const API_ROUTES = {
   createDeliverySheet: "/api/Order/CreateDeliverySheet",
   removeOrderFromDeliverySheet: "/api/Order/RemoveOrderFromDeliverySheet",
   generateDeliverySheet: "/api/Order/GenerateDeliverySheet",
+  deliverySheetDebriefing: (deliverySheetId: number | string) =>
+    `/api/Order/DeliverySheetDebriefing?deliverySheetId=${deliverySheetId}`,
+  pickDeliverySheet: "/api/Order/PickDeliverySheet",
+  closeDeliverySheet: "/api/Order/CloseDeliverySheet",
+  updateOrderDeliveryStatus: "/api/Order/UpdateOrderDeliveryStatus",
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",
