@@ -53,13 +53,42 @@ export const API_ROUTES = {
   retryDispatch: "/api/Order/RetryDispatch",
   reweightArrival: "/api/Order/ReweightArrival",
   createDeliverySheet: "/api/Order/CreateDeliverySheet",
+  createReturnDocument: "/api/Order/CreateReturnDocument",
+  generateReturnDocument: "/api/Order/GenerateReturnDocument",
+  /** No filter params supported — always returns every return document; filter client-side. */
+  getAllReturnDocuments: "/api/Order/GetAllReturnDocuments",
+  getReturnDocumentView: (returnDocumentId: number | string) =>
+    `/api/Order/GetReturnDocumentView?returnDocumentId=${returnDocumentId}`,
+  generateReturnDocumentById: (returnDocumentId: number | string) =>
+    `/api/Order/GenerateReturnDocumentById?returnDocumentId=${returnDocumentId}`,
+  removeOrderFromReturnDocument: "/api/Order/RemoveOrderFromReturnDocument",
+  updateReturnDocumentStatus: "/api/Order/UpdateReturnDocumentStatus",
   removeOrderFromDeliverySheet: "/api/Order/RemoveOrderFromDeliverySheet",
   generateDeliverySheet: "/api/Order/GenerateDeliverySheet",
+  generateDeliverySheetById: (deliverySheetId: number | string) =>
+    `/api/Order/GenerateDeliverySheetById?deliverySheetId=${deliverySheetId}`,
   deliverySheetDebriefing: (deliverySheetId: number | string) =>
     `/api/Order/DeliverySheetDebriefing?deliverySheetId=${deliverySheetId}`,
+  /** No filter params supported — always returns every delivery sheet; filter client-side. */
+  getAllDeliverySheets: "/api/Order/GetAllDeliverySheets",
+  getDeliverySheetView: (sheetId: number | string) =>
+    `/api/Order/GetDeliverySheetView?deliverySheetId=${sheetId}`,
   pickDeliverySheet: "/api/Order/PickDeliverySheet",
   closeDeliverySheet: "/api/Order/CloseDeliverySheet",
   updateOrderDeliveryStatus: "/api/Order/UpdateOrderDeliveryStatus",
+
+  getAllShipperAdvices: (params: {
+    listType: string;
+    clientId?: number;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const query = new URLSearchParams({ ListType: params.listType });
+    if (params.clientId) query.set("ClientId", String(params.clientId));
+    if (params.page) query.set("Page", String(params.page));
+    if (params.pageSize) query.set("PageSize", String(params.pageSize));
+    return `/api/Order/GetAllShipperAdvices?${query.toString()}`;
+  },
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",

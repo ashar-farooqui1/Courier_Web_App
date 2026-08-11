@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getClientZoneCouriers, saveClientZoneCouriers } from '@/lib/api/client-zone-couriers';
 import { ApiError } from '@/lib/api/http';
+import type { PickupType } from '@/lib/types/zone-courier';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const PICKUP_TYPES: PickupType[] = ['Stallionex', 'ThirdPartyLogistics'];
+
+function parsePickupType(value: unknown): PickupType | null {
+  return typeof value === 'string' && (PICKUP_TYPES as string[]).includes(value)
+    ? (value as PickupType)
+    : null;
+}
 
 function parseClientId(id: string): number | null {
   const clientId = Number(id);
@@ -45,8 +54,17 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const body = (await request.json()) as {
+      pickupType?: unknown;
       zones?: Array<{ zoneId?: unknown; couriers?: Array<{ courierId?: unknown; priority?: unknown }> }>;
     };
+
+    const pickupType = parsePickupType(body.pickupType);
+    if (!pickupType) {
+      return NextResponse.json(
+        { message: 'Please select a pickup type (Stallionex or ThirdPartyLogistics)' },
+        { status: 400 }
+      );
+    }
 
     const zones = Array.isArray(body.zones)
       ? body.zones
@@ -75,7 +93,7 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ message: 'Please set at least one zone priority' }, { status: 400 });
     }
 
-    const result = await saveClientZoneCouriers({ clientId, zones });
+    const result = await saveClientZoneCouriers({ clientId, pickupType, zones });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {

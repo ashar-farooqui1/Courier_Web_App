@@ -160,6 +160,14 @@ export interface CreateDeliverySheetPayload {
   deliverySheetDate: string;
 }
 
+export interface CreateReturnDocumentPayload {
+  awbNo: string[];
+  riderId: number;
+  adminId: number;
+  warehouseId: number;
+  returnDocumentDate: string;
+}
+
 export interface RemoveOrderFromDeliverySheetPayload {
   awbNo: string;
   deliverySheetId: number;

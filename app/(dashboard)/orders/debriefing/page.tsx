@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -108,7 +109,22 @@ function matchesTab(order: DeliverySheetDebriefingOrder, tab: DebriefTabKey): bo
 }
 
 export default function RollcartDebriefingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <p className="text-sm text-slate-400">Loading…</p>
+        </div>
+      }
+    >
+      <RollcartDebriefingContent />
+    </Suspense>
+  );
+}
+
+function RollcartDebriefingContent() {
   const { token, role, user, ready } = useAuthSession();
+  const searchParams = useSearchParams();
 
   const [rollcartId, setRollcartId] = useState('');
   const [loadedDeliverySheetId, setLoadedDeliverySheetId] = useState<number | null>(null);
@@ -176,6 +192,19 @@ export default function RollcartDebriefingPage() {
       setError(err instanceof Error ? err.message : 'Failed to load rollcart');
     }
   };
+
+  // Auto-load when arriving with ?deliverySheetId= in the URL (e.g. from the rollcart view's Info button).
+  useEffect(() => {
+    if (!ready || !token) return;
+
+    const queryId = Number(searchParams.get('deliverySheetId'));
+    if (!Number.isInteger(queryId) || queryId < 1) return;
+
+    setRollcartId(String(queryId));
+    setLoading(true);
+    fetchDebriefing(queryId, true).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, token, searchParams]);
 
   const loadDebriefing = async () => {
     const deliverySheetId = Number(rollcartId.trim());

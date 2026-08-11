@@ -7,7 +7,12 @@ import { ArrowLeft } from 'lucide-react';
 import type { Client } from '@/lib/types/client';
 import type { Zone } from '@/lib/types/zone';
 import type { Courier } from '@/lib/types/courier';
-import type { ZoneCourierMapping } from '@/lib/types/zone-courier';
+import type { PickupType, ZoneCourierMapping } from '@/lib/types/zone-courier';
+
+const PICKUP_TYPE_OPTIONS: { value: PickupType; label: string }[] = [
+  { value: 'Stallionex', label: 'Stallionex' },
+  { value: 'ThirdPartyLogistics', label: 'Third Party Logistics' },
+];
 
 interface DeliveryType {
   id: string;
@@ -58,6 +63,7 @@ export default function DeliveryTypesPage() {
 
   const [types, setTypes] = useState<DeliveryType[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
+  const [pickupType, setPickupType] = useState<PickupType | null>(null);
   const [loadingBoard, setLoadingBoard] = useState(true);
   const [typesError, setTypesError] = useState<string | null>(null);
   const [couriersError, setCouriersError] = useState<string | null>(null);
@@ -148,6 +154,11 @@ export default function DeliveryTypesPage() {
       return;
     }
 
+    if (!pickupType) {
+      setSaveError('Please select a pickup type.');
+      return;
+    }
+
     const zones = types.map(t => ({
       zoneId: Number(t.id),
       couriers: t.priorities
@@ -165,7 +176,7 @@ export default function DeliveryTypesPage() {
       const response = await fetch(`/api/clients/${clientId}/zone-couriers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zones }),
+        body: JSON.stringify({ pickupType, zones }),
       });
 
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -230,6 +241,26 @@ export default function DeliveryTypesPage() {
           {saveError ?? saveMessage}
         </div>
       )}
+
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 space-y-3">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pickup Type</span>
+        <div className="flex flex-wrap gap-6">
+          {PICKUP_TYPE_OPTIONS.map((option) => (
+            <label
+              key={option.value}
+              className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={pickupType === option.value}
+                onChange={() => setPickupType(option.value)}
+                className="rounded border-slate-300 text-primary focus:ring-primary"
+              />
+              {option.label}
+            </label>
+          ))}
+        </div>
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <table className="w-full text-left">

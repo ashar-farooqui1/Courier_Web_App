@@ -17,6 +17,7 @@ import type {
   OrderDetailRemark,
   OrderDetailSender,
   CreateDeliverySheetPayload,
+  CreateReturnDocumentPayload,
   OrderPickupLocationDetails,
   RemoveOrderFromDeliverySheetPayload,
   ReweightArrivalPayload,
@@ -29,6 +30,24 @@ import type {
   DeliverySheetDebriefingResponse,
   UpdateOrderDeliveryStatusPayload,
 } from '@/lib/types/debriefing';
+import type {
+  DeliverySheetListData,
+  DeliverySheetListResponse,
+  DeliverySheetViewData,
+  DeliverySheetViewResponse,
+} from '@/lib/types/delivery-sheet';
+import type {
+  RemoveOrderFromReturnDocumentPayload,
+  ReturnDocumentListData,
+  ReturnDocumentListResponse,
+  ReturnDocumentViewData,
+  ReturnDocumentViewResponse,
+  UpdateReturnDocumentStatusPayload,
+} from '@/lib/types/return-document';
+import type {
+  ShipperAdviceListData,
+  ShipperAdviceListResponse,
+} from '@/lib/types/shipper-advice';
 
 function pickString(record: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
@@ -883,6 +902,60 @@ export async function createDeliverySheet(
   };
 }
 
+interface CreateReturnDocumentApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/**
+ * POST /api/Order/CreateReturnDocument. Backend response shape for `data` isn't confirmed
+ * yet, so it's returned as-is for the caller to interpret defensively.
+ */
+export async function createReturnDocument(
+  payload: CreateReturnDocumentPayload,
+  token?: string
+): Promise<{ message: string; data: unknown }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.createReturnDocument}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: CreateReturnDocumentApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as CreateReturnDocumentApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to create return document (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return {
+    message: body.message ?? 'Return document created successfully',
+    data: body.data,
+  };
+}
+
 interface RemoveOrderFromDeliverySheetApiResponse {
   success?: boolean;
   message?: string | null;
@@ -931,6 +1004,102 @@ export async function removeOrderFromDeliverySheet(
   return body.message ?? 'Order removed from delivery sheet';
 }
 
+interface RemoveOrderFromReturnDocumentApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/** POST /api/Order/RemoveOrderFromReturnDocument */
+export async function removeOrderFromReturnDocument(
+  payload: RemoveOrderFromReturnDocumentPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.removeOrderFromReturnDocument}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: RemoveOrderFromReturnDocumentApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as RemoveOrderFromReturnDocumentApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to remove order from return document (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return body.message ?? 'Order removed from return document';
+}
+
+interface UpdateReturnDocumentStatusApiResponse {
+  success?: boolean;
+  message?: string | null;
+  data?: unknown;
+  details?: unknown;
+}
+
+/** POST /api/Order/UpdateReturnDocumentStatus */
+export async function updateReturnDocumentStatus(
+  payload: UpdateReturnDocumentStatusPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.updateReturnDocumentStatus}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: UpdateReturnDocumentStatusApiResponse = {};
+
+  try {
+    body = text ? (JSON.parse(text) as UpdateReturnDocumentStatusApiResponse) : {};
+  } catch {
+    body = {};
+  }
+
+  if (!response.ok || body.success === false) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to update return document status (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  return body.message ?? 'Return document status updated';
+}
+
 /** POST /api/Order/GenerateDeliverySheet — returns the delivery sheet file for the given orders. */
 export async function generateDeliverySheet(
   payload: CreateDeliverySheetPayload,
@@ -972,6 +1141,143 @@ export async function generateDeliverySheet(
     filename: parseContentDispositionFilename(
       response.headers.get('Content-Disposition'),
       'DeliverySheet.pdf'
+    ),
+  };
+}
+
+/** POST /api/Order/GenerateReturnDocument — returns the return document file for the given orders. */
+export async function generateReturnDocument(
+  payload: CreateReturnDocumentPayload,
+  token?: string
+): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: '*/*',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.generateReturnDocument}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const contentType = response.headers.get('Content-Type') ?? '';
+    let body: unknown;
+
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => undefined);
+    } else {
+      body = await response.text().catch(() => undefined);
+    }
+
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to generate return document (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: parseContentDispositionFilename(
+      response.headers.get('Content-Disposition'),
+      'ReturnDocument.pdf'
+    ),
+  };
+}
+
+/** GET /api/Order/GenerateDeliverySheetById?deliverySheetId= — returns the delivery sheet file for an existing rollcart. */
+export async function generateDeliverySheetById(
+  deliverySheetId: number,
+  token?: string
+): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {
+    Accept: '*/*',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(
+    `${API_BASE_URL}${API_ROUTES.generateDeliverySheetById(deliverySheetId)}`,
+    {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    }
+  );
+
+  if (!response.ok) {
+    const contentType = response.headers.get('Content-Type') ?? '';
+    let body: unknown;
+
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => undefined);
+    } else {
+      body = await response.text().catch(() => undefined);
+    }
+
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to generate delivery sheet (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: parseContentDispositionFilename(
+      response.headers.get('Content-Disposition'),
+      'DeliverySheet.pdf'
+    ),
+  };
+}
+
+/** GET /api/Order/GenerateReturnDocumentById?returnDocumentId= — returns the return document file for an existing return document. */
+export async function generateReturnDocumentById(
+  returnDocumentId: number,
+  token?: string
+): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {
+    Accept: '*/*',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(
+    `${API_BASE_URL}${API_ROUTES.generateReturnDocumentById(returnDocumentId)}`,
+    {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    }
+  );
+
+  if (!response.ok) {
+    const contentType = response.headers.get('Content-Type') ?? '';
+    let body: unknown;
+
+    if (contentType.includes('application/json')) {
+      body = await response.json().catch(() => undefined);
+    } else {
+      body = await response.text().catch(() => undefined);
+    }
+
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to generate return document (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const blob = await response.blob();
+  return {
+    blob,
+    filename: parseContentDispositionFilename(
+      response.headers.get('Content-Disposition'),
+      'ReturnDocument.pdf'
     ),
   };
 }
@@ -1296,6 +1602,243 @@ export async function getDeliverySheetDebriefing(
   if (!payload || payload.success === false || !payload.data) {
     throw new ApiError(
       parseApiErrorMessage(payload, 'Failed to fetch debriefing'),
+      response.status,
+      payload
+    );
+  }
+
+  return payload.data;
+}
+
+/** GET /api/Order/GetAllDeliverySheets — no filter params supported; always returns every sheet. */
+export async function getAllDeliverySheets(token?: string): Promise<DeliverySheetListData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.getAllDeliverySheets}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch delivery sheets (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as DeliverySheetListResponse;
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(
+      parseApiErrorMessage(payload, 'Failed to fetch delivery sheets'),
+      response.status,
+      payload
+    );
+  }
+
+  return payload.data;
+}
+
+/** GET /api/Order/GetAllReturnDocuments — no filter params supported; always returns every return document. */
+export async function getAllReturnDocuments(token?: string): Promise<ReturnDocumentListData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.getAllReturnDocuments}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch return documents (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as ReturnDocumentListResponse;
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(
+      parseApiErrorMessage(payload, 'Failed to fetch return documents'),
+      response.status,
+      payload
+    );
+  }
+
+  return payload.data;
+}
+
+/** GET /api/Order/GetAllShipperAdvices?ListType=&ClientId=&Page=&PageSize= */
+export async function getAllShipperAdvices(
+  params: { listType: string; clientId?: number; page?: number; pageSize?: number },
+  token?: string
+): Promise<ShipperAdviceListData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.getAllShipperAdvices(params)}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch shipper advices (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as ShipperAdviceListResponse;
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(
+      parseApiErrorMessage(payload, 'Failed to fetch shipper advices'),
+      response.status,
+      payload
+    );
+  }
+
+  return payload.data;
+}
+
+/** GET /api/Order/GetReturnDocumentView?returnDocumentId= — the `number` field from GetAllReturnDocuments is the returnDocumentId. */
+export async function getReturnDocumentView(
+  returnDocumentId: number,
+  token?: string
+): Promise<ReturnDocumentViewData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}${API_ROUTES.getReturnDocumentView(returnDocumentId)}`,
+    {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    }
+  );
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch return document (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as ReturnDocumentViewResponse;
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(
+      parseApiErrorMessage(payload, 'Failed to fetch return document'),
+      response.status,
+      payload
+    );
+  }
+
+  return payload.data;
+}
+
+/** GET /api/Order/GetDeliverySheetView?sheetId= — the `number` field from GetAllDeliverySheets is the sheetId. */
+export async function getDeliverySheetView(
+  sheetId: number,
+  token?: string
+): Promise<DeliverySheetViewData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.getDeliverySheetView(sheetId)}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch rollcart (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as DeliverySheetViewResponse;
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(
+      parseApiErrorMessage(payload, 'Failed to fetch rollcart'),
       response.status,
       payload
     );
