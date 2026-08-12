@@ -83,12 +83,14 @@ export const API_ROUTES = {
     page?: number;
     pageSize?: number;
   }) => {
-    const query = new URLSearchParams({ ListType: params.listType });
+    const query = new URLSearchParams();
+    if (params.listType) query.set("ListType", params.listType);
     if (params.clientId) query.set("ClientId", String(params.clientId));
     if (params.page) query.set("Page", String(params.page));
     if (params.pageSize) query.set("PageSize", String(params.pageSize));
     return `/api/Order/GetAllShipperAdvices?${query.toString()}`;
   },
+  approveShipperAdvice: "/api/Order/ApproveShipperAdvice",
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",

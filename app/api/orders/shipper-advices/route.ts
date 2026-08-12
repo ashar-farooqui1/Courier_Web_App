@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const listType = searchParams.get("listType") ?? "";
 
-  if (!LIST_TYPES.includes(listType)) {
+  if (listType !== "" && !LIST_TYPES.includes(listType)) {
     return NextResponse.json({ message: "Invalid list type" }, { status: 400 });
   }
 

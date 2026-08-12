@@ -1,4 +1,4 @@
-export type ShipperAdviceListType = 'Pending' | 'Published';
+export type ShipperAdviceListType = 'Pending' | 'Published' | '';
 
 export interface ShipperAdviceItem {
   shipperAdviceId: number;

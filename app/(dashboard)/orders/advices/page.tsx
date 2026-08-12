@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { History, Clock, Scan, FileOutput } from 'lucide-react';
+import { History, Clock, Scan, FileOutput, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthSession } from '@/hooks/useAuthRole';
 import { buildAppAuthHeaders } from '@/lib/api/app-request-context';
@@ -26,11 +26,12 @@ const AdviceTab = ({ icon: Icon, label, active, onClick }: any) => (
   </button>
 );
 
-type TabKey = 'History' | 'Pending' | 'Scane' | 'Export';
+type TabKey = 'History' | 'Pending' | 'Published' | 'Scane' | 'Export';
 
 const TAB_LIST_TYPES: Partial<Record<TabKey, ShipperAdviceListType>> = {
-  History: 'Published',
+  History: '',
   Pending: 'Pending',
+  Published: 'Published',
 };
 
 export default function OrdersAdvicesPage() {
@@ -43,11 +44,13 @@ export default function OrdersAdvicesPage() {
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
 
   const listType = TAB_LIST_TYPES[activeTab];
+  const isPendingTab = activeTab === 'Pending';
 
-  useEffect(() => {
-    if (!ready || !listType) return;
+  const fetchAdvices = useCallback(() => {
+    if (!ready || listType === undefined) return;
 
     if (!token) {
       setError('Authentication required. Please log in again.');
@@ -59,10 +62,12 @@ export default function OrdersAdvicesPage() {
     setError(null);
 
     const query = new URLSearchParams({
-      listType,
       page: String(page),
       pageSize: String(pageSize),
     });
+    if (listType) {
+      query.set('listType', listType);
+    }
 
     fetch(`/api/orders/shipper-advices?${query.toString()}`, {
       headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
@@ -84,13 +89,44 @@ export default function OrdersAdvicesPage() {
       .finally(() => setLoading(false));
   }, [ready, token, role, user?.userId, listType, page, pageSize]);
 
+  useEffect(() => {
+    fetchAdvices();
+  }, [fetchAdvices]);
+
   const changeTab = (tab: TabKey) => {
     setActiveTab(tab);
     setPage(1);
   };
 
+  const handleApprove = async (shipperAdviceId: number) => {
+    if (!token) return;
+
+    setApprovingId(shipperAdviceId);
+    try {
+      const response = await fetch('/api/orders/shipper-advices/approve', {
+        method: 'POST',
+        headers: {
+          ...buildAppAuthHeaders(token, role, user?.userId ?? 0),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ shipperAdviceId }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(parseApiErrorMessage(payload, `Failed to approve advice (${response.status})`));
+      }
+      fetchAdvices();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve advice');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const tableHeaders = [
-    'Sr No', 'CN', 'Amount', 'Vendor Order ID', 'Current Status',
+    'Sr No', 'CN', 'Amount', 'Vendor Order ID',
+    ...(isPendingTab ? ['Approval', 'Approval Date'] : []),
+    'Current Status',
     'Current Status Date', 'Requested Status', 'Remain Time',
     'Customer Phone No', 'Rider Remarks', 'Shipper Name',
     'Customer Name', 'Total Attempts'
@@ -104,6 +140,7 @@ export default function OrdersAdvicesPage() {
         {/* Advice Tabs */}
         <div className="flex items-center gap-2 p-1 bg-white rounded-lg border border-slate-100 shadow-sm">
           <AdviceTab icon={History} label="History" active={activeTab === 'History'} onClick={() => changeTab('History')} />
+          <AdviceTab icon={CheckCircle2} label="Published Advices" active={activeTab === 'Published'} onClick={() => changeTab('Published')} />
           <AdviceTab icon={Clock} label="Pending Advices" active={activeTab === 'Pending'} onClick={() => changeTab('Pending')} />
           <AdviceTab icon={Scan} label="Scane Advices" active={activeTab === 'Scane'} onClick={() => changeTab('Scane')} />
           <AdviceTab icon={FileOutput} label="Export Log" active={activeTab === 'Export'} onClick={() => changeTab('Export')} />
@@ -153,21 +190,21 @@ export default function OrdersAdvicesPage() {
               </tr>
             </thead>
             <tbody className="text-[11px] font-medium text-slate-600">
-              {!listType ? (
+              {listType === undefined ? (
                 <tr>
-                  <td colSpan={13} className="py-20 text-center">
+                  <td colSpan={tableHeaders.length} className="py-20 text-center">
                     <p className="text-slate-300 italic text-sm font-medium">Not available yet</p>
                   </td>
                 </tr>
               ) : loading ? (
                 <tr>
-                  <td colSpan={13} className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  <td colSpan={tableHeaders.length} className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Loading advices…
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-20 text-center">
+                  <td colSpan={tableHeaders.length} className="py-20 text-center">
                     <p className="text-slate-300 italic text-sm font-medium">No advices found</p>
                   </td>
                 </tr>
@@ -178,6 +215,26 @@ export default function OrdersAdvicesPage() {
                     <td className="p-4 font-bold text-primary whitespace-nowrap">{row.awbNo}</td>
                     <td className="p-4 whitespace-nowrap">{formatAmount(row.amount)}</td>
                     <td className="p-4 whitespace-nowrap">{row.vendorOrderId || '—'}</td>
+                    {isPendingTab && (
+                      <>
+                        <td className="p-4 whitespace-nowrap">
+                          {row.approval?.toLowerCase() === 'approved' ? (
+                            <span className="px-2 py-1 bg-emerald-500 text-white rounded text-[9px] font-bold uppercase">
+                              {row.approval}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleApprove(row.shipperAdviceId)}
+                              disabled={approvingId === row.shipperAdviceId}
+                              className="px-3 py-1.5 bg-emerald-500 text-white rounded text-[9px] font-bold uppercase shadow-sm disabled:opacity-60 active:scale-95 transition-all"
+                            >
+                              {approvingId === row.shipperAdviceId ? 'Approving…' : row.approval || 'Approve Remark'}
+                            </button>
+                          )}
+                        </td>
+                        <td className="p-4 whitespace-nowrap text-slate-400">{row.approvalDate ? formatOrderDate(row.approvalDate) : '—'}</td>
+                      </>
+                    )}
                     <td className="p-4 whitespace-nowrap">{row.currentStatus || '—'}</td>
                     <td className="p-4 whitespace-nowrap">{formatOrderDate(row.currentStatusDate)}</td>
                     <td className="p-4 whitespace-nowrap">{row.requestedStatus || '—'}</td>
@@ -194,7 +251,7 @@ export default function OrdersAdvicesPage() {
           </table>
         </div>
 
-        {listType && (
+        {listType !== undefined && (
           <OrdersPaginationFooter page={page} pageSize={pageSize} totalItems={totalCount} onPageChange={setPage} />
         )}
       </div>

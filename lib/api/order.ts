@@ -1748,6 +1748,57 @@ export async function getAllShipperAdvices(
   return payload.data;
 }
 
+/** POST /api/Order/ApproveShipperAdvice */
+export async function approveShipperAdvice(
+  payload: { shipperAdviceId: number; adminId: number },
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.approveShipperAdvice}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to approve shipper advice (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) return 'Shipper advice approved successfully';
+
+  try {
+    const parsed = JSON.parse(text) as { success?: boolean; message?: string };
+    if (parsed.success === false) {
+      throw new ApiError(parseApiErrorMessage(parsed, 'Failed to approve shipper advice'), response.status, parsed);
+    }
+    return typeof parsed.message === 'string' && parsed.message ? parsed.message : 'Shipper advice approved successfully';
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    return 'Shipper advice approved successfully';
+  }
+}
+
 /** GET /api/Order/GetReturnDocumentView?returnDocumentId= — the `number` field from GetAllReturnDocuments is the returnDocumentId. */
 export async function getReturnDocumentView(
   returnDocumentId: number,
