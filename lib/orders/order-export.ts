@@ -1,4 +1,5 @@
 import { formatAmount, formatOrderDate } from "@/components/orders/order-columns";
+import { downloadCsv } from "@/lib/format";
 import { formatOrderStatusLabel } from "@/lib/orders/order-status-options";
 import type { ClientOrder } from "@/lib/types/order";
 
@@ -25,7 +26,7 @@ export const ORDER_EXPORT_HEADERS = [
   "Courier Tracking Status",
 ] as const;
 
-function orderToExportRow(order: ClientOrder): (string | number)[] {
+export function orderToExportRow(order: ClientOrder): (string | number)[] {
   return [
     order.awbNo || "",
     order.clientName || "",
@@ -64,4 +65,9 @@ export async function exportOrdersToExcel(
   XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
 
   XLSX.writeFile(workbook, filename);
+}
+
+/** Builds a .csv file from the given orders and triggers a browser download. Client-side only. */
+export function exportOrdersToCsv(orders: ClientOrder[], filename = "orders-export.csv"): void {
+  downloadCsv(ORDER_EXPORT_HEADERS, orders.map(orderToExportRow), filename);
 }

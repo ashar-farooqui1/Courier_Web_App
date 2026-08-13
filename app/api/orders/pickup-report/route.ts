@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAllShipperAdvices } from "@/lib/api/order";
+import { getPickupReport } from "@/lib/api/order";
 import { ApiError } from "@/lib/api/http";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { readAppRequestContext, resolveOrdersClientId } from "@/lib/api/app-request-context";
@@ -11,9 +11,7 @@ function getBearerToken(request: Request): string | undefined {
   return token || undefined;
 }
 
-const LIST_TYPES = ["history", "publish", "pending"];
-
-/** Proxies GET /api/Order/GetAllShipperAdvices?ListType=&ClientId=&Page=&PageSize= */
+/** Proxies GET /api/Order/GetPickupReport?ClientId=&RiderId=&CityId=&PickupDateFrom=&PickupDateTo=&Page=&PageSize= */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
 
@@ -22,12 +20,6 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const listType = searchParams.get("listType") ?? "";
-
-  if (!LIST_TYPES.includes(listType)) {
-    return NextResponse.json({ message: "Invalid list type" }, { status: 400 });
-  }
-
   const clientIdParam = searchParams.get("clientId");
   const requestedClientId = clientIdParam ? Number(clientIdParam) : undefined;
 
@@ -42,12 +34,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ message: scoped.error }, { status: scoped.status ?? 403 });
   }
 
+  const riderId = Number(searchParams.get("riderId")) || undefined;
+  const cityId = Number(searchParams.get("cityId")) || undefined;
+  const pickupDateFrom = searchParams.get("pickupDateFrom") || undefined;
+  const pickupDateTo = searchParams.get("pickupDateTo") || undefined;
   const page = Number(searchParams.get("page")) || undefined;
   const pageSize = Number(searchParams.get("pageSize")) || undefined;
 
   try {
-    const data = await getAllShipperAdvices(
-      { listType, clientId: scoped.clientId, page, pageSize },
+    const data = await getPickupReport(
+      { clientId: scoped.clientId, riderId, cityId, pickupDateFrom, pickupDateTo, page, pageSize },
       token
     );
     return NextResponse.json(data);
@@ -58,7 +54,7 @@ export async function GET(request: Request) {
         { status: error.status }
       );
     }
-    const message = error instanceof Error ? error.message : "Failed to fetch shipper advices";
+    const message = error instanceof Error ? error.message : "Failed to fetch pickup report";
     return NextResponse.json({ message }, { status: 500 });
   }
 }

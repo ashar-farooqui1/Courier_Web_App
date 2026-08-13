@@ -8,6 +8,7 @@ import type { Client } from '@/lib/types/client';
 import type { Zone } from '@/lib/types/zone';
 import type { Courier } from '@/lib/types/courier';
 import type { PickupType, ZoneCourierMapping } from '@/lib/types/zone-courier';
+import type { ClientZoneCouriersResult } from '@/lib/api/client-zone-couriers';
 
 const PICKUP_TYPE_OPTIONS: { value: PickupType; label: string }[] = [
   { value: 'Stallionex', label: 'Stallionex' },
@@ -97,12 +98,12 @@ export default function DeliveryTypesPage() {
     setTypesError(null);
     setCouriersError(null);
 
-    const savedPromise: Promise<ZoneCourierMapping[]> =
+    const savedPromise: Promise<ClientZoneCouriersResult> =
       Number.isInteger(clientId) && clientId > 0
         ? fetch(`/api/clients/${clientId}/zone-couriers`)
-            .then((r) => (r.ok ? (r.json() as Promise<ZoneCourierMapping[]>) : []))
-            .catch(() => [])
-        : Promise.resolve([]);
+            .then((r) => (r.ok ? (r.json() as Promise<ClientZoneCouriersResult>) : { pickupType: null, zones: [] }))
+            .catch(() => ({ pickupType: null, zones: [] }))
+        : Promise.resolve({ pickupType: null, zones: [] });
 
     const [zonesResult, couriersResult, savedResult] = await Promise.allSettled([
       fetchJson<Zone[]>('/api/zones', 'zones'),
@@ -113,7 +114,7 @@ export default function DeliveryTypesPage() {
     const zones = zonesResult.status === 'fulfilled' && Array.isArray(zonesResult.value) ? zonesResult.value : [];
     const couriersList =
       couriersResult.status === 'fulfilled' && Array.isArray(couriersResult.value) ? couriersResult.value : [];
-    const saved = savedResult.status === 'fulfilled' && Array.isArray(savedResult.value) ? savedResult.value : [];
+    const saved = savedResult.status === 'fulfilled' ? savedResult.value : { pickupType: null, zones: [] };
 
     if (zonesResult.status === 'rejected') {
       setTypesError(zonesResult.reason instanceof Error ? zonesResult.reason.message : 'Failed to load zones');
@@ -125,7 +126,8 @@ export default function DeliveryTypesPage() {
     }
 
     setCouriers(couriersList);
-    setTypes(buildDeliveryTypes(zones, couriersList, saved));
+    setTypes(buildDeliveryTypes(zones, couriersList, saved.zones));
+    setPickupType(saved.pickupType);
     setLoadingBoard(false);
   }, [clientId]);
 

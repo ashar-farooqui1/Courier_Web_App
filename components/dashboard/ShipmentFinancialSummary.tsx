@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatAmount } from "@/components/orders/order-columns";
+import { normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
+import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import type { ClientOrder } from "@/lib/types/order";
 
 type Tone = "slate" | "amber" | "emerald" | "cyan" | "violet" | "rose";
@@ -45,7 +47,7 @@ const Tile = ({
   tone,
   expandable,
   expanded,
-  onToggle,
+  onClick,
 }: {
   label: string;
   value: string | number;
@@ -54,15 +56,15 @@ const Tile = ({
   tone: Tone;
   expandable?: boolean;
   expanded?: boolean;
-  onToggle?: () => void;
+  onClick?: () => void;
 }) => {
   const toneClasses = TONE_CLASSES[tone];
   return (
     <div
-      onClick={expandable ? onToggle : undefined}
+      onClick={onClick}
       className={cn(
         "bg-white rounded-xl border border-slate-100 shadow-sm p-5 flex flex-col gap-3 transition-all",
-        expandable && "cursor-pointer hover:border-slate-200 hover:shadow-md"
+        onClick && "cursor-pointer hover:border-slate-200 hover:shadow-md"
       )}
     >
       <div className="flex items-start justify-between">
@@ -89,11 +91,22 @@ const SectionHeading = ({ title }: { title: string }) => (
   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">{title}</h3>
 );
 
-export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrder[] }) {
+export default function ShipmentFinancialSummary({
+  orders,
+  onFilterClick,
+}: {
+  orders: ClientOrder[];
+  /** Called with the statuses a tile represents (empty array = no filter, i.e. all orders) when a tile is clicked. */
+  onFilterClick?: (statuses: OrderStatusApiValue[]) => void;
+}) {
   const [breakdownOpen, setBreakdownOpen] = useState(false);
 
   const buckets = useMemo(() => {
-    const byStatus = (statuses: string[]) => orders.filter((o) => statuses.includes(o.status));
+    const byStatus = (statuses: OrderStatusApiValue[]) =>
+      orders.filter((o) => {
+        const normalized = normalizeOrderStatusValue(o.status);
+        return normalized !== null && statuses.includes(normalized);
+      });
 
     const handedOverToStallionex = byStatus(["ArrivedAtOrigin"]);
     const delivered = byStatus(["Delivered"]);
@@ -122,11 +135,41 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
       shipperAdvice,
       inProcess,
       breakdown: [
-        { label: "In-Transit", icon: Truck, list: inTransit, tone: "cyan" as Tone },
-        { label: "Reached At Destination", icon: Home, list: reachedAtDestination, tone: "violet" as Tone },
-        { label: "Out For Delivery", icon: Bike, list: outForDelivery, tone: "emerald" as Tone },
-        { label: "Delivery Rescheduled", icon: CalendarClock, list: deliveryRescheduled, tone: "amber" as Tone },
-        { label: "Return In-Process", icon: RotateCcw, list: returnInProcess, tone: "rose" as Tone },
+        {
+          label: "In-Transit",
+          icon: Truck,
+          list: inTransit,
+          statuses: ["OutForDestination"] as OrderStatusApiValue[],
+          tone: "cyan" as Tone,
+        },
+        {
+          label: "Reached At Destination",
+          icon: Home,
+          list: reachedAtDestination,
+          statuses: ["ArrivedAtDestination"] as OrderStatusApiValue[],
+          tone: "violet" as Tone,
+        },
+        {
+          label: "Out For Delivery",
+          icon: Bike,
+          list: outForDelivery,
+          statuses: ["OutForDelivery"] as OrderStatusApiValue[],
+          tone: "emerald" as Tone,
+        },
+        {
+          label: "Delivery Rescheduled",
+          icon: CalendarClock,
+          list: deliveryRescheduled,
+          statuses: ["RequestForReattempt", "Reattempted"] as OrderStatusApiValue[],
+          tone: "amber" as Tone,
+        },
+        {
+          label: "Return In-Process",
+          icon: RotateCcw,
+          list: returnInProcess,
+          statuses: ["ReturnConfirm", "ReturnInTransit", "ReturnOutForDelivery", "ReturnReceivedAtOrigin"] as OrderStatusApiValue[],
+          tone: "rose" as Tone,
+        },
       ],
     };
   }, [orders]);
@@ -142,6 +185,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
             subLabel={`Rs ${formatAmount(codSum(buckets.totalBooked))}`}
             icon={ClipboardList}
             tone="slate"
+            onClick={onFilterClick ? () => onFilterClick([]) : undefined}
           />
           <Tile
             label="Handed Over To Stallionex"
@@ -149,6 +193,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
             subLabel={`Rs ${formatAmount(codSum(buckets.handedOverToStallionex))}`}
             icon={Truck}
             tone="cyan"
+            onClick={onFilterClick ? () => onFilterClick(["ArrivedAtOrigin"]) : undefined}
           />
           <Tile
             label="Delivered"
@@ -156,6 +201,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
             subLabel={`Rs ${formatAmount(codSum(buckets.delivered))}`}
             icon={PackageCheck}
             tone="emerald"
+            onClick={onFilterClick ? () => onFilterClick(["Delivered"]) : undefined}
           />
           <Tile
             label="Returned"
@@ -163,6 +209,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
             subLabel={`Rs ${formatAmount(codSum(buckets.returned))}`}
             icon={Undo2}
             tone="rose"
+            onClick={onFilterClick ? () => onFilterClick(["ParcelReturned"]) : undefined}
           />
           <Tile
             label="In-Process"
@@ -171,7 +218,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
             tone="violet"
             expandable
             expanded={breakdownOpen}
-            onToggle={() => setBreakdownOpen((prev) => !prev)}
+            onClick={() => setBreakdownOpen((prev) => !prev)}
           />
           <Tile
             label="Shipper Advice"
@@ -179,6 +226,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
             subLabel={`Rs ${formatAmount(codSum(buckets.shipperAdvice))}`}
             icon={Hourglass}
             tone="amber"
+            onClick={onFilterClick ? () => onFilterClick(["HaltAdviceSent"]) : undefined}
           />
         </div>
 
@@ -195,6 +243,7 @@ export default function ShipmentFinancialSummary({ orders }: { orders: ClientOrd
                   value={item.list.length}
                   icon={item.icon}
                   tone={item.tone}
+                  onClick={onFilterClick ? () => onFilterClick(item.statuses) : undefined}
                 />
               ))}
             </div>

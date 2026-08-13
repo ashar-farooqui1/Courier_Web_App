@@ -91,6 +91,27 @@ export const API_ROUTES = {
     return `/api/Order/GetAllShipperAdvices?${query.toString()}`;
   },
   approveShipperAdvice: "/api/Order/ApproveShipperAdvice",
+  submitShipperAdviceRequest: "/api/Order/SubmitShipperAdviceRequest",
+
+  getPickupReport: (params: {
+    clientId?: number;
+    riderId?: number;
+    cityId?: number;
+    pickupDateFrom?: string;
+    pickupDateTo?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const query = new URLSearchParams();
+    if (params.clientId) query.set("ClientId", String(params.clientId));
+    if (params.riderId) query.set("RiderId", String(params.riderId));
+    if (params.cityId) query.set("CityId", String(params.cityId));
+    if (params.pickupDateFrom) query.set("PickupDateFrom", params.pickupDateFrom);
+    if (params.pickupDateTo) query.set("PickupDateTo", params.pickupDateTo);
+    if (params.page) query.set("Page", String(params.page));
+    if (params.pageSize) query.set("PageSize", String(params.pageSize));
+    return `/api/Order/GetPickupReport?${query.toString()}`;
+  },
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",

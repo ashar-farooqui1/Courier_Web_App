@@ -1,6 +1,7 @@
 import { API_ROUTES } from '@/lib/api/config';
 import { apiGet, apiPostJson } from '@/lib/api/http';
 import type {
+  PickupType,
   SaveZoneCourierPayload,
   SaveZoneCourierResponse,
   ZoneCourierItem,
@@ -12,6 +13,15 @@ interface ClientZoneCouriersApiResponse {
   message?: string | null;
   data?: unknown;
   details?: unknown;
+}
+
+export interface ClientZoneCouriersResult {
+  pickupType: PickupType | null;
+  zones: ZoneCourierMapping[];
+}
+
+function normalizePickupType(value: unknown): PickupType | null {
+  return value === 'Stallionex' || value === 'ThirdPartyLogistics' ? value : null;
 }
 
 function pickNumber(record: Record<string, unknown>, keys: string[]): number {
@@ -50,18 +60,37 @@ function normalizeZoneCourierMapping(raw: unknown): ZoneCourierMapping | null {
   return { zoneId, couriers };
 }
 
-/** GET /api/Client/GetClientZoneCouriers?clientId={clientId} */
-export async function getClientZoneCouriers(clientId: number): Promise<ZoneCourierMapping[]> {
+/**
+ * GET /api/Client/GetClientZoneCouriers?clientId={clientId}
+ *
+ * The backend nests the zone list under `data.zones` (with `data.pickupType` alongside
+ * it), not directly under `data` — plain `data` is an object here, not an array.
+ */
+export async function getClientZoneCouriers(clientId: number): Promise<ClientZoneCouriersResult> {
   const response = await apiGet<ClientZoneCouriersApiResponse | ZoneCourierMapping[]>(
     API_ROUTES.clientZoneCouriers(clientId)
   );
 
-  const rows = Array.isArray(response) ? response : response.data;
-  if (!Array.isArray(rows)) return [];
+  const data = Array.isArray(response) ? response : response.data;
 
-  return rows
-    .map(normalizeZoneCourierMapping)
-    .filter((mapping): mapping is ZoneCourierMapping => mapping !== null);
+  const rawZones = Array.isArray(data)
+    ? data
+    : data && typeof data === 'object'
+      ? (data as Record<string, unknown>).zones
+      : undefined;
+
+  const pickupType =
+    data && typeof data === 'object' && !Array.isArray(data)
+      ? normalizePickupType((data as Record<string, unknown>).pickupType)
+      : null;
+
+  const zones = Array.isArray(rawZones)
+    ? rawZones
+        .map(normalizeZoneCourierMapping)
+        .filter((mapping): mapping is ZoneCourierMapping => mapping !== null)
+    : [];
+
+  return { pickupType, zones };
 }
 
 /** POST /api/Client/SaveZoneCouriers */

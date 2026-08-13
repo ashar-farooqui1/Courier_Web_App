@@ -1,11 +1,11 @@
-export type ShipperAdviceListType = 'Pending' | 'Published' | '';
+export type ShipperAdviceListType = 'history' | 'publish' | 'pending';
 
 export interface ShipperAdviceItem {
   shipperAdviceId: number;
   awbNo: string;
   amount: number;
   vendorOrderId: string | null;
-  approval: string | null;
+  isApproved: boolean;
   approvalDate: string | null;
   currentStatus: string;
   currentStatusDate: string;
@@ -31,4 +31,11 @@ export interface ShipperAdviceListResponse {
   message: string | null;
   data: ShipperAdviceListData | null;
   details: unknown;
+}
+
+export interface SubmitShipperAdviceRequestPayload {
+  shipperAdviceId: number;
+  clientId: number;
+  requestedStatus: string;
+  remarks: string;
 }

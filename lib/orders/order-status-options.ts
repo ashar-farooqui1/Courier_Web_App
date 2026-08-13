@@ -59,6 +59,12 @@ const ORDER_STATUS_LABEL_BY_VALUE = new Map(
   ORDER_STATUS_OPTIONS.map((option) => [option.value, option.label])
 );
 
+/** Some list endpoints (e.g. GetOrders, GetPickupReport) send the human-readable
+ *  Description text ("Arrived At Origin") instead of the enum key ("ArrivedAtOrigin"). */
+const ORDER_STATUS_VALUE_BY_LABEL = new Map(
+  ORDER_STATUS_OPTIONS.map((option) => [option.label.toLowerCase(), option.value])
+);
+
 export function isOrderStatusApiValue(value: unknown): value is OrderStatusApiValue {
   return typeof value === "string" && ORDER_STATUS_API_VALUE_SET.has(value);
 }
@@ -73,6 +79,9 @@ export function normalizeOrderStatusValue(status: string | null | undefined): Or
   if (!raw) return null;
 
   if (isOrderStatusApiValue(raw)) return raw;
+
+  const byLabel = ORDER_STATUS_VALUE_BY_LABEL.get(raw.toLowerCase());
+  if (byLabel) return byLabel;
 
   const numeric = Number(raw);
   if (Number.isInteger(numeric) && numeric >= 0 && numeric < ORDER_STATUS_API_VALUES.length) {

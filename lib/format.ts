@@ -19,9 +19,42 @@ export function formatArrivalAt(value: string): string {
   });
 }
 
+/** Formats a backend TimeSpan string ("HH:mm:ss.fffffff") as a 12-hour clock time. */
+export function formatTimeOfDay(value: string | null | undefined): string {
+  if (!value) return '—';
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return value;
+
+  const hours24 = Number(match[1]);
+  const minutes = match[2];
+  const period = hours24 >= 12 ? 'PM' : 'AM';
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes} ${period}`;
+}
+
 export function formatStatusLabel(status: string): string {
   if (!status) return '—';
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+}
+
+/** Builds a CSV file from the given rows and triggers a browser download. Client-side only. */
+export function downloadCsv(headers: readonly string[], rows: (string | number)[][], filename: string): void {
+  const escapeCell = (cell: string | number) => {
+    const value = String(cell ?? '');
+    return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  };
+
+  const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(',')).join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function parseContentDispositionFilename(header: string | null, fallback: string): string {

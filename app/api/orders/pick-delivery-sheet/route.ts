@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { pickDeliverySheet } from "@/lib/api/order";
 import { ApiError } from "@/lib/api/http";
+import { readAppRequestContext } from "@/lib/api/app-request-context";
+import { isAdminRole } from "@/lib/auth/role";
 
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get("Authorization");
@@ -30,8 +32,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Invalid delivery sheet ID" }, { status: 400 });
   }
 
+  const ctx = readAppRequestContext(request);
+  const adminId = isAdminRole(ctx.role) ? ctx.userId : 0;
+
   try {
-    const message = await pickDeliverySheet(deliverySheetId, token);
+    const message = await pickDeliverySheet({ deliverySheetId, adminId }, token);
     return NextResponse.json({ success: true, message });
   } catch (error) {
     if (error instanceof ApiError) {

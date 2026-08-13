@@ -44,9 +44,11 @@ import type {
   ReturnDocumentViewResponse,
   UpdateReturnDocumentStatusPayload,
 } from '@/lib/types/return-document';
+import type { GetPickupReportParams, PickupReportData } from '@/lib/types/pickup-report';
 import type {
   ShipperAdviceListData,
   ShipperAdviceListResponse,
+  SubmitShipperAdviceRequestPayload,
 } from '@/lib/types/shipper-advice';
 
 function pickString(record: Record<string, unknown>, keys: string[]): string {
@@ -1748,6 +1750,50 @@ export async function getAllShipperAdvices(
   return payload.data;
 }
 
+/** GET /api/Order/GetPickupReport?ClientId=&RiderId=&CityId=&PickupDateFrom=&PickupDateTo=&Page=&PageSize= */
+export async function getPickupReport(
+  params: GetPickupReportParams,
+  token?: string
+): Promise<PickupReportData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.getPickupReport(params)}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = text ? JSON.parse(text) : text;
+  } catch {
+    /* plain text or empty */
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch pickup report (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  const payload = body as { success?: boolean; message?: string | null; data?: PickupReportData | null };
+
+  if (!payload || payload.success === false || !payload.data) {
+    throw new ApiError(parseApiErrorMessage(payload, 'Failed to fetch pickup report'), response.status, payload);
+  }
+
+  return payload.data;
+}
+
 /** POST /api/Order/ApproveShipperAdvice */
 export async function approveShipperAdvice(
   payload: { shipperAdviceId: number; adminId: number },
@@ -1796,6 +1842,63 @@ export async function approveShipperAdvice(
   } catch (error) {
     if (error instanceof ApiError) throw error;
     return 'Shipper advice approved successfully';
+  }
+}
+
+/** POST /api/Order/SubmitShipperAdviceRequest */
+export async function submitShipperAdviceRequest(
+  payload: SubmitShipperAdviceRequestPayload,
+  token?: string
+): Promise<string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${API_ROUTES.submitShipperAdviceRequest}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to submit shipper advice request (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) return 'Shipper advice request submitted successfully';
+
+  try {
+    const parsed = JSON.parse(text) as { success?: boolean; message?: string };
+    if (parsed.success === false) {
+      throw new ApiError(
+        parseApiErrorMessage(parsed, 'Failed to submit shipper advice request'),
+        response.status,
+        parsed
+      );
+    }
+    return typeof parsed.message === 'string' && parsed.message
+      ? parsed.message
+      : 'Shipper advice request submitted successfully';
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    return 'Shipper advice request submitted successfully';
   }
 }
 
@@ -1906,7 +2009,10 @@ interface PickDeliverySheetApiResponse {
 }
 
 /** POST /api/Order/PickDeliverySheet — assigns all unassigned orders on the delivery sheet to the rider. */
-export async function pickDeliverySheet(deliverySheetId: number, token?: string): Promise<string> {
+export async function pickDeliverySheet(
+  payload: { deliverySheetId: number; adminId: number },
+  token?: string
+): Promise<string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -1919,7 +2025,7 @@ export async function pickDeliverySheet(deliverySheetId: number, token?: string)
   const response = await fetch(`${API_BASE_URL}${API_ROUTES.pickDeliverySheet}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ deliverySheetId }),
+    body: JSON.stringify(payload),
     cache: 'no-store',
   });
 

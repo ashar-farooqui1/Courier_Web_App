@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Import,
@@ -32,7 +32,7 @@ import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import { exportOrdersToExcel } from "@/lib/orders/order-export";
-import { ORDER_STATUS_OPTIONS, normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
+import { ORDER_STATUS_OPTIONS, isOrderStatusApiValue, normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
 import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import type { Client } from "@/lib/types/client";
@@ -239,6 +239,12 @@ const StatusMultiSelectFilter = ({
 export default function AdminOrdersView() {
   const { token, ready, role, user } = useAuthSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const statusParam = searchParams.get("status");
+  const initialStatusFilter: OrderStatusApiValue[] = statusParam
+    ? statusParam.split(",").map((s) => s.trim()).filter(isOrderStatusApiValue)
+    : [];
 
   const [modalStates, setModalStates] = useState({
     import: false,
@@ -270,8 +276,8 @@ export default function AdminOrdersView() {
     trackingNumbers: "",
     status: [] as OrderStatusApiValue[],
   };
-  const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
-  const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
+  const [filterDraft, setFilterDraft] = useState(() => ({ ...emptyOrderFilters, status: initialStatusFilter }));
+  const [appliedFilters, setAppliedFilters] = useState(() => ({ ...emptyOrderFilters, status: initialStatusFilter }));
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [selectedStatus, setSelectedStatus] = useState("");
   const [finalizingOrders, setFinalizingOrders] = useState(false);

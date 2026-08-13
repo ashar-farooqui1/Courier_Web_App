@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Import,
@@ -27,7 +27,8 @@ import type { ClientOrder } from "@/lib/types/order";
 import type { MnpTrackingDetail } from "@/lib/types/mnp";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import { exportOrdersToExcel } from "@/lib/orders/order-export";
-import { ORDER_STATUS_OPTIONS } from "@/lib/orders/order-status-options";
+import { ORDER_STATUS_OPTIONS, isOrderStatusApiValue, normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
+import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import { ORDER_COLUMNS } from "@/components/orders/order-columns";
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 
@@ -195,7 +196,13 @@ const OrderFilter = ({
 
 export default function ClientOrdersView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { token, clientId, role, ready, user } = useAuthSession();
+
+  const statusParam = searchParams.get("status");
+  const initialStatusFilter: OrderStatusApiValue[] = statusParam
+    ? statusParam.split(",").map((s) => s.trim()).filter(isOrderStatusApiValue)
+    : [];
 
   const [modalStates, setModalStates] = useState({
     addNew: false,
@@ -215,10 +222,10 @@ export default function ClientOrdersView() {
     dateFrom: "",
     dateTo: "",
     city: "",
-    status: "",
+    status: [] as OrderStatusApiValue[],
   };
-  const [filterDraft, setFilterDraft] = useState(emptyOrderFilters);
-  const [appliedFilters, setAppliedFilters] = useState(emptyOrderFilters);
+  const [filterDraft, setFilterDraft] = useState(() => ({ ...emptyOrderFilters, status: initialStatusFilter }));
+  const [appliedFilters, setAppliedFilters] = useState(() => ({ ...emptyOrderFilters, status: initialStatusFilter }));
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(() => new Set());
   const [generatingAwb, setGeneratingAwb] = useState(false);
   const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
@@ -355,7 +362,10 @@ export default function ClientOrdersView() {
         order.originCity !== appliedFilters.city
       )
         return false;
-      if (appliedFilters.status && order.status !== appliedFilters.status) return false;
+      if (appliedFilters.status.length > 0) {
+        const normalizedStatus = normalizeOrderStatusValue(order.status);
+        if (!normalizedStatus || !appliedFilters.status.includes(normalizedStatus)) return false;
+      }
       if (!isWithinDateRange(order.orderDate, appliedFilters.dateFrom, appliedFilters.dateTo)) return false;
 
       return true;
@@ -809,8 +819,13 @@ export default function ClientOrdersView() {
               </label>
               <div className="relative">
                 <select
-                  value={filterDraft.status}
-                  onChange={(e) => updateFilterDraft("status", e.target.value)}
+                  value={filterDraft.status[0] ?? ""}
+                  onChange={(e) =>
+                    setFilterDraft((prev) => ({
+                      ...prev,
+                      status: e.target.value ? [e.target.value as OrderStatusApiValue] : [],
+                    }))
+                  }
                   className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[11px] font-bold text-slate-700 appearance-none focus:outline-none focus:ring-1 focus:ring-primary/20"
                 >
                   <option value="">Select Status</option>

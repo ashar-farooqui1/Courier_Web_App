@@ -28,8 +28,8 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   try {
-    const zones = await getClientZoneCouriers(clientId);
-    return NextResponse.json(zones);
+    const result = await getClientZoneCouriers(clientId);
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof ApiError) {
       const details = error.body as { message?: string } | undefined;

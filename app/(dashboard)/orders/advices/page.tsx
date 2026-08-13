@@ -2,13 +2,14 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { History, Clock, Scan, FileOutput, CheckCircle2 } from 'lucide-react';
+import { History, Clock, Scan, FileOutput, CheckCircle2, MessageSquarePlus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthSession } from '@/hooks/useAuthRole';
 import { buildAppAuthHeaders } from '@/lib/api/app-request-context';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { formatOrderDate, formatAmount } from '@/components/orders/order-columns';
 import { PageSizeSelect, OrdersPaginationFooter } from '@/components/orders/OrdersPagination';
+import { ORDER_STATUS_OPTIONS } from '@/lib/orders/order-status-options';
 import type { ShipperAdviceListData, ShipperAdviceListType, ShipperAdviceItem } from '@/lib/types/shipper-advice';
 
 const AdviceTab = ({ icon: Icon, label, active, onClick }: any) => (
@@ -29,13 +30,13 @@ const AdviceTab = ({ icon: Icon, label, active, onClick }: any) => (
 type TabKey = 'History' | 'Pending' | 'Published' | 'Scane' | 'Export';
 
 const TAB_LIST_TYPES: Partial<Record<TabKey, ShipperAdviceListType>> = {
-  History: '',
-  Pending: 'Pending',
-  Published: 'Published',
+  History: 'history',
+  Pending: 'pending',
+  Published: 'publish',
 };
 
 export default function OrdersAdvicesPage() {
-  const { token, role, user, ready } = useAuthSession();
+  const { token, role, user, clientId, ready } = useAuthSession();
 
   const [activeTab, setActiveTab] = useState<TabKey>('History');
   const [rows, setRows] = useState<ShipperAdviceItem[]>([]);
@@ -44,10 +45,15 @@ export default function OrdersAdvicesPage() {
   const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [remarkRow, setRemarkRow] = useState<ShipperAdviceItem | null>(null);
+  const [remarkStatus, setRemarkStatus] = useState('');
+  const [remarkText, setRemarkText] = useState('');
+  const [submittingRemark, setSubmittingRemark] = useState(false);
+  const [remarkError, setRemarkError] = useState<string | null>(null);
 
   const listType = TAB_LIST_TYPES[activeTab];
   const isPendingTab = activeTab === 'Pending';
+  const isPublishedTab = activeTab === 'Published';
 
   const fetchAdvices = useCallback(() => {
     if (!ready || listType === undefined) return;
@@ -98,28 +104,71 @@ export default function OrdersAdvicesPage() {
     setPage(1);
   };
 
-  const handleApprove = async (shipperAdviceId: number) => {
-    if (!token) return;
+  const openRemarkModal = (row: ShipperAdviceItem) => {
+    setRemarkRow(row);
+    setRemarkStatus('');
+    setRemarkText('');
+    setRemarkError(null);
+  };
 
-    setApprovingId(shipperAdviceId);
+  const closeRemarkModal = () => {
+    if (submittingRemark) return;
+    setRemarkRow(null);
+    setRemarkStatus('');
+    setRemarkText('');
+    setRemarkError(null);
+  };
+
+  const handleSubmitRemark = async () => {
+    if (!remarkRow) return;
+
+    if (!remarkStatus) {
+      setRemarkError('Please select a requested status.');
+      return;
+    }
+
+    const text = remarkText.trim();
+    if (!text) {
+      setRemarkError('Please type a remark.');
+      return;
+    }
+
+    if (!token || !clientId) {
+      setRemarkError('Session not found. Please log in again.');
+      return;
+    }
+
+    setSubmittingRemark(true);
+    setRemarkError(null);
+
     try {
-      const response = await fetch('/api/orders/shipper-advices/approve', {
+      const response = await fetch('/api/orders/shipper-advices/request', {
         method: 'POST',
         headers: {
           ...buildAppAuthHeaders(token, role, user?.userId ?? 0),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ shipperAdviceId }),
+        body: JSON.stringify({
+          shipperAdviceId: remarkRow.shipperAdviceId,
+          clientId,
+          requestedStatus: remarkStatus,
+          remarks: text,
+        }),
       });
+
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(parseApiErrorMessage(payload, `Failed to approve advice (${response.status})`));
+        throw new Error(parseApiErrorMessage(payload, `Failed to submit request (${response.status})`));
       }
+
+      setRemarkRow(null);
+      setRemarkStatus('');
+      setRemarkText('');
       fetchAdvices();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve advice');
+      setRemarkError(err instanceof Error ? err.message : 'Failed to submit request');
     } finally {
-      setApprovingId(null);
+      setSubmittingRemark(false);
     }
   };
 
@@ -128,8 +177,9 @@ export default function OrdersAdvicesPage() {
     ...(isPendingTab ? ['Approval', 'Approval Date'] : []),
     'Current Status',
     'Current Status Date', 'Requested Status', 'Remain Time',
-    'Customer Phone No', 'Rider Remarks', 'Shipper Name',
-    'Customer Name', 'Total Attempts'
+    'Customer Phone No', 'Rider Remarks', 'Remarks', 'Shipper Name',
+    'Customer Name', 'Total Attempts',
+    ...(isPublishedTab ? ['Actions'] : []),
   ];
 
   return (
@@ -218,17 +268,17 @@ export default function OrdersAdvicesPage() {
                     {isPendingTab && (
                       <>
                         <td className="p-4 whitespace-nowrap">
-                          {row.approval?.toLowerCase() === 'approved' ? (
+                          {row.isApproved ? (
                             <span className="px-2 py-1 bg-emerald-500 text-white rounded text-[9px] font-bold uppercase">
-                              {row.approval}
+                              Approved
                             </span>
                           ) : (
                             <button
-                              onClick={() => handleApprove(row.shipperAdviceId)}
-                              disabled={approvingId === row.shipperAdviceId}
-                              className="px-3 py-1.5 bg-emerald-500 text-white rounded text-[9px] font-bold uppercase shadow-sm disabled:opacity-60 active:scale-95 transition-all"
+                              disabled
+                              title="Waiting for admin approval"
+                              className="px-3 py-1.5 bg-slate-200 text-slate-400 rounded text-[9px] font-bold uppercase cursor-not-allowed"
                             >
-                              {approvingId === row.shipperAdviceId ? 'Approving…' : row.approval || 'Approve Remark'}
+                              Approve Remark
                             </button>
                           )}
                         </td>
@@ -241,9 +291,20 @@ export default function OrdersAdvicesPage() {
                     <td className="p-4 whitespace-nowrap">—</td>
                     <td className="p-4 whitespace-nowrap">{row.customerPhoneNo || '—'}</td>
                     <td className="p-4 max-w-[200px] leading-tight">{row.riderRemarks || '—'}</td>
+                    <td className="p-4 max-w-[200px] leading-tight">{row.remarks || '—'}</td>
                     <td className="p-4 whitespace-nowrap">{row.shipperName || '—'}</td>
                     <td className="p-4 whitespace-nowrap">{row.customerName || '—'}</td>
                     <td className="p-4 whitespace-nowrap">{row.totalAttempts}</td>
+                    {isPublishedTab && (
+                      <td className="p-4 whitespace-nowrap">
+                        <button
+                          onClick={() => openRemarkModal(row)}
+                          className="px-3 py-1.5 bg-primary text-white rounded text-[9px] font-bold uppercase shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
+                        >
+                          <MessageSquarePlus size={12} /> Add Remarks
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -255,6 +316,68 @@ export default function OrdersAdvicesPage() {
           <OrdersPaginationFooter page={page} pageSize={pageSize} totalItems={totalCount} onPageChange={setPage} />
         )}
       </div>
+
+      {remarkRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">
+                Add Remarks — {remarkRow.awbNo}
+              </h3>
+              <button onClick={closeRemarkModal} className="text-slate-400 hover:text-slate-600">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Requested Status</label>
+              <select
+                value={remarkStatus}
+                onChange={(e) => setRemarkStatus(e.target.value)}
+                disabled={submittingRemark}
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-slate-700 focus:outline-none"
+              >
+                <option value="">Select status</option>
+                {ORDER_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.label}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <textarea
+              value={remarkText}
+              onChange={(e) => setRemarkText(e.target.value)}
+              placeholder="Type a remark"
+              rows={4}
+              disabled={submittingRemark}
+              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 focus:outline-none resize-none"
+            />
+
+            {remarkError && (
+              <p className="text-[11px] font-bold text-red-600">{remarkError}</p>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={closeRemarkModal}
+                disabled={submittingRemark}
+                className="h-9 px-4 text-[11px] font-bold uppercase text-slate-500 hover:text-slate-700 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleSubmitRemark()}
+                disabled={submittingRemark || !remarkText.trim() || !remarkStatus}
+                className="h-9 px-5 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md active:scale-95 transition-all disabled:opacity-60"
+              >
+                {submittingRemark ? 'Submitting…' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
