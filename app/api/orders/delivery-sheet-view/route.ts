@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const deliverySheetId = Number(searchParams.get('deliverySheetId'));
 
   if (!Number.isInteger(deliverySheetId) || deliverySheetId < 1) {
-    return NextResponse.json({ message: 'Invalid rollcart id' }, { status: 400 });
+    return NextResponse.json({ message: 'Invalid delivery sheet id' }, { status: 400 });
   }
 
   try {
@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         { status: error.status }
       );
     }
-    const message = error instanceof Error ? error.message : 'Failed to fetch rollcart';
+    const message = error instanceof Error ? error.message : 'Failed to fetch delivery sheet';
     return NextResponse.json({ message }, { status: 500 });
   }
 }

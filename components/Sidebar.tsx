@@ -226,7 +226,7 @@ const Sidebar = () => {
             "pl-14 py-2 text-[12px] font-medium transition-colors hover:text-primary",
             pathname === '/orders/rollcarts' ? "text-primary" : "text-slate-400"
           )}>
-            Create Rollcarts
+            Create Delivery Sheets
           </Link>
           <Link href="/orders/quick-scan" className={cn(
             "pl-14 py-2 text-[12px] font-medium transition-colors hover:text-primary",
@@ -244,13 +244,13 @@ const Sidebar = () => {
             "pl-14 py-2 text-[12px] font-medium transition-colors hover:text-primary",
             pathname === '/orders/debriefing' ? "text-primary" : "text-slate-400"
           )}>
-            Rollcart Debriefing
+            Delivery Sheet Debriefing
           </Link>
           <Link href="/orders/receivable" className={cn(
             "pl-14 py-2 text-[12px] font-medium transition-colors hover:text-primary",
             pathname === '/orders/receivable' ? "text-primary" : "text-slate-400"
           )}>
-            Rollcart Receivable
+            Delivery Sheet Receivable
           </Link>
         </SidebarItem>
 
@@ -385,7 +385,7 @@ const Sidebar = () => {
             "pl-14 py-2 text-[12px] font-medium transition-colors hover:text-primary",
             pathname === '/documents/rollcarts' ? "text-primary" : "text-slate-400"
           )}>
-            Rollcarts
+            Delivery Sheets
           </Link>
           <Link href="/documents/return" className={cn(
             "pl-14 py-2 text-[12px] font-medium transition-colors hover:text-primary",

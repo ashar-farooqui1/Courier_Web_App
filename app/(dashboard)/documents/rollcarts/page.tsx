@@ -89,7 +89,7 @@ export default function RollcartsPage() {
       .then(async (response) => {
         const payload = await response.json().catch(() => null);
         if (!response.ok) {
-          throw new Error(parseApiErrorMessage(payload, `Failed to load rollcarts (${response.status})`));
+          throw new Error(parseApiErrorMessage(payload, `Failed to load delivery sheets (${response.status})`));
         }
         const data = payload as DeliverySheetListData;
         setSummary(data.summary);
@@ -98,19 +98,19 @@ export default function RollcartsPage() {
       .catch((err) => {
         setSummary(null);
         setRows([]);
-        setError(err instanceof Error ? err.message : 'Failed to load rollcarts');
+        setError(err instanceof Error ? err.message : 'Failed to load delivery sheets');
       })
       .finally(() => setLoading(false));
   }, [ready, token, role, user?.userId]);
 
   return (
     <div className="space-y-6 max-w-[1900px] mx-auto animate-in fade-in duration-500 pb-10">
-      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">RollCart</h1>
+      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Delivery Sheet</h1>
 
       {/* Main Container Card */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-50 bg-slate-50/10">
-          <h2 className="text-xs font-black text-slate-600 uppercase tracking-widest">Rollcarts</h2>
+          <h2 className="text-xs font-black text-slate-600 uppercase tracking-widest">Delivery Sheets</h2>
         </div>
 
         <div className="p-8 space-y-10">
@@ -148,7 +148,7 @@ export default function RollcartsPage() {
             <StatItem label="Total Return Confirm" value={summary?.totalReturnConfirm ?? 0} />
 
             <StatItem label="Delivered Amount" value={formatAmount(summary?.deliveredAmount ?? 0)} />
-            <StatItem label="Total Rollcarts" value={summary?.totalRollcarts ?? 0} />
+            <StatItem label="Total Delivery Sheets" value={summary?.totalRollcarts ?? 0} />
             <StatItem label="Total Amount" value={formatAmount(summary?.totalAmount ?? 0)} />
             <StatItem label="Total Shipment" value={summary?.totalShipment ?? 0} />
 
@@ -183,13 +183,13 @@ export default function RollcartsPage() {
                 {loading ? (
                   <tr>
                     <td colSpan={11} className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                      Loading rollcarts…
+                      Loading delivery sheets…
                     </td>
                   </tr>
                 ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="py-20 text-center">
-                      <p className="text-slate-300 italic text-sm font-medium">No rollcarts found</p>
+                      <p className="text-slate-300 italic text-sm font-medium">No delivery sheets found</p>
                     </td>
                   </tr>
                 ) : (

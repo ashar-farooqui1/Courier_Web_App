@@ -22,7 +22,7 @@ export default function RollcartReceivablePage() {
   const [loading, setLoading] = useState(false);
 
   const pendingHeaders = [
-    'Created At', 'RollCart #', 'WareHouse', 'Rider Name', 'Closed At', 'Days', 
+    'Created At', 'Delivery Sheet #', 'WareHouse', 'Rider Name', 'Closed At', 'Days',
     'Total Shipments', 'Pickup', 'Reattempt', 'Advice', 'Return Confirm', 
     'Delivered', 'Total Order Amount', 'Status'
   ];
@@ -34,7 +34,7 @@ export default function RollcartReceivablePage() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
-      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Rollcart Receivable</h1>
+      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Delivery Sheet Receivable</h1>
 
       {/* Filters Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -49,8 +49,8 @@ export default function RollcartReceivablePage() {
             <input type="date" defaultValue="2026-04-29" className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none" />
           </div>
           <div className="flex-1 min-w-[200px] space-y-1.5">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Search Rollcart #</label>
-            <input type="text" placeholder="Search Rollcart #" className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none" />
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Search Delivery Sheet #</label>
+            <input type="text" placeholder="Search Delivery Sheet #" className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none" />
           </div>
           <div className="flex-1 min-w-[200px] space-y-1.5">
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Warehouse</label>
@@ -67,11 +67,11 @@ export default function RollcartReceivablePage() {
         </div>
       </div>
 
-      {/* Pending RollCarts Section */}
+      {/* Pending Delivery Sheets Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <SectionHeader title="Pending RollCarts" />
+        <SectionHeader title="Pending Delivery Sheets" />
         <div className="flex flex-wrap border-b border-slate-50">
-          <MiniStat label="Total Rollcarts" value="0" />
+          <MiniStat label="Total Delivery Sheets" value="0" />
           <div className="w-[1px] h-8 bg-slate-100 self-center" />
           <MiniStat label="Total Orders" value="0" />
           <div className="w-[1px] h-8 bg-slate-100 self-center" />
@@ -99,11 +99,11 @@ export default function RollcartReceivablePage() {
         </div>
       </div>
 
-      {/* Closed and Unpaid RollCart Section */}
+      {/* Closed and Unpaid Delivery Sheet Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-        <SectionHeader title="Closed and Unpaid RollCart" />
+        <SectionHeader title="Closed and Unpaid Delivery Sheet" />
         <div className="flex flex-wrap border-b border-slate-50">
-          <MiniStat label="Total Rollcarts" value="0" />
+          <MiniStat label="Total Delivery Sheets" value="0" />
           <div className="w-[1px] h-8 bg-slate-100 self-center" />
           <MiniStat label="Total Orders" value="0" />
           <div className="w-[1px] h-8 bg-slate-100 self-center" />

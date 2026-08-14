@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { History, Clock, Scan, FileOutput, CheckCircle2, MessageSquarePlus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useAuthSession } from '@/hooks/useAuthRole';
+import { isAdminRole, isClientRole } from '@/lib/auth/role';
 import { buildAppAuthHeaders } from '@/lib/api/app-request-context';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { formatOrderDate, formatAmount } from '@/components/orders/order-columns';
@@ -50,10 +51,14 @@ export default function OrdersAdvicesPage() {
   const [remarkText, setRemarkText] = useState('');
   const [submittingRemark, setSubmittingRemark] = useState(false);
   const [remarkError, setRemarkError] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const [approveError, setApproveError] = useState<string | null>(null);
 
   const listType = TAB_LIST_TYPES[activeTab];
   const isPendingTab = activeTab === 'Pending';
   const isPublishedTab = activeTab === 'Published';
+  const canAddRemarks = isPublishedTab && isClientRole(role);
+  const canApproveRemarks = isPendingTab && isAdminRole(role);
 
   const fetchAdvices = useCallback(() => {
     if (!ready || listType === undefined) return;
@@ -128,10 +133,6 @@ export default function OrdersAdvicesPage() {
     }
 
     const text = remarkText.trim();
-    if (!text) {
-      setRemarkError('Please type a remark.');
-      return;
-    }
 
     if (!token || !clientId) {
       setRemarkError('Session not found. Please log in again.');
@@ -172,6 +173,38 @@ export default function OrdersAdvicesPage() {
     }
   };
 
+  const handleApproveRemark = async (row: ShipperAdviceItem) => {
+    if (!token) {
+      setApproveError('Authentication required. Please log in again.');
+      return;
+    }
+
+    setApprovingId(row.shipperAdviceId);
+    setApproveError(null);
+
+    try {
+      const response = await fetch('/api/orders/shipper-advices/approve', {
+        method: 'POST',
+        headers: {
+          ...buildAppAuthHeaders(token, role, user?.userId ?? 0),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ shipperAdviceId: row.shipperAdviceId }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(parseApiErrorMessage(payload, `Failed to approve remark (${response.status})`));
+      }
+
+      fetchAdvices();
+    } catch (err) {
+      setApproveError(err instanceof Error ? err.message : 'Failed to approve remark');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const tableHeaders = [
     'Sr No', 'CN', 'Amount', 'Vendor Order ID',
     ...(isPendingTab ? ['Approval', 'Approval Date'] : []),
@@ -179,7 +212,7 @@ export default function OrdersAdvicesPage() {
     'Current Status Date', 'Requested Status', 'Remain Time',
     'Customer Phone No', 'Rider Remarks', 'Remarks', 'Shipper Name',
     'Customer Name', 'Total Attempts',
-    ...(isPublishedTab ? ['Actions'] : []),
+    ...(canAddRemarks ? ['Actions'] : []),
   ];
 
   return (
@@ -224,6 +257,12 @@ export default function OrdersAdvicesPage() {
         {error && (
           <div className="mx-6 mt-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
             {error}
+          </div>
+        )}
+
+        {approveError && (
+          <div className="mx-6 mt-6 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs font-bold">
+            {approveError}
           </div>
         )}
 
@@ -272,6 +311,14 @@ export default function OrdersAdvicesPage() {
                             <span className="px-2 py-1 bg-emerald-500 text-white rounded text-[9px] font-bold uppercase">
                               Approved
                             </span>
+                          ) : canApproveRemarks ? (
+                            <button
+                              onClick={() => void handleApproveRemark(row)}
+                              disabled={approvingId === row.shipperAdviceId}
+                              className="px-3 py-1.5 bg-primary text-white rounded text-[9px] font-bold uppercase shadow-sm active:scale-95 transition-all disabled:opacity-60"
+                            >
+                              {approvingId === row.shipperAdviceId ? 'Approving…' : 'Approve Remark'}
+                            </button>
                           ) : (
                             <button
                               disabled
@@ -295,7 +342,7 @@ export default function OrdersAdvicesPage() {
                     <td className="p-4 whitespace-nowrap">{row.shipperName || '—'}</td>
                     <td className="p-4 whitespace-nowrap">{row.customerName || '—'}</td>
                     <td className="p-4 whitespace-nowrap">{row.totalAttempts}</td>
-                    {isPublishedTab && (
+                    {canAddRemarks && (
                       <td className="p-4 whitespace-nowrap">
                         <button
                           onClick={() => openRemarkModal(row)}
@@ -369,7 +416,7 @@ export default function OrdersAdvicesPage() {
               </button>
               <button
                 onClick={() => void handleSubmitRemark()}
-                disabled={submittingRemark || !remarkText.trim() || !remarkStatus}
+                disabled={submittingRemark || !remarkStatus}
                 className="h-9 px-5 bg-primary text-white text-[11px] font-bold rounded uppercase shadow-md active:scale-95 transition-all disabled:opacity-60"
               >
                 {submittingRemark ? 'Submitting…' : 'Submit Request'}

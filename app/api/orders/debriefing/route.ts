@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const deliverySheetId = Number(searchParams.get('deliverySheetId'));
 
   if (!Number.isInteger(deliverySheetId) || deliverySheetId < 1) {
-    return NextResponse.json({ message: 'Invalid rollcart id' }, { status: 400 });
+    return NextResponse.json({ message: 'Invalid delivery sheet id' }, { status: 400 });
   }
 
   try {

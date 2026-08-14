@@ -21,7 +21,7 @@ export default function RollcartViewPage() {
   if (!Number.isInteger(sheetId) || sheetId < 1) {
     return (
       <div className="p-6">
-        <p className="text-sm text-red-600">Invalid rollcart id</p>
+        <p className="text-sm text-red-600">Invalid delivery sheet id</p>
       </div>
     );
   }

@@ -169,7 +169,7 @@ function RollcartDebriefingContent() {
       const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(parseApiErrorMessage(payload, `Failed to load rollcart (${response.status})`));
+        throw new Error(parseApiErrorMessage(payload, `Failed to load delivery sheet (${response.status})`));
       }
 
       const debriefing = payload as DeliverySheetDebriefingData;
@@ -189,7 +189,7 @@ function RollcartDebriefingContent() {
       setSearchAwb('');
       setSearchedOrder(null);
       setSearchError(null);
-      setError(err instanceof Error ? err.message : 'Failed to load rollcart');
+      setError(err instanceof Error ? err.message : 'Failed to load delivery sheet');
     }
   };
 
@@ -210,7 +210,7 @@ function RollcartDebriefingContent() {
     const deliverySheetId = Number(rollcartId.trim());
 
     if (!Number.isInteger(deliverySheetId) || deliverySheetId < 1) {
-      setError('Enter a valid rollcart id');
+      setError('Enter a valid delivery sheet id');
       return;
     }
 
@@ -258,12 +258,12 @@ function RollcartDebriefingContent() {
       const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(parseApiErrorMessage(payload, `Failed to assign rollcart (${response.status})`));
+        throw new Error(parseApiErrorMessage(payload, `Failed to assign delivery sheet (${response.status})`));
       }
 
       await fetchDebriefing(loadedDeliverySheetId, false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to assign rollcart');
+      setError(err instanceof Error ? err.message : 'Failed to assign delivery sheet');
     } finally {
       setAssigning(false);
     }
@@ -378,7 +378,7 @@ function RollcartDebriefingContent() {
 
     if (!match) {
       setSearchedOrder(null);
-      setSearchError('Order not found in this rollcart.');
+      setSearchError('Order not found in this delivery sheet.');
       return;
     }
 
@@ -460,7 +460,7 @@ function RollcartDebriefingContent() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
-      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Rollcart Debriefing</h1>
+      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Delivery Sheet Debriefing</h1>
 
       {/* Top Header Stats Bar */}
       <div className="bg-primary rounded-xl shadow-lg overflow-hidden flex flex-wrap items-stretch">
@@ -513,7 +513,7 @@ function RollcartDebriefingContent() {
               value={rollcartId}
               onChange={(e) => setRollcartId(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && loadDebriefing()}
-              placeholder="Rollcart Id key"
+              placeholder="Delivery Sheet Id key"
               className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded text-sm font-bold text-primary focus:outline-none"
             />
           </div>
@@ -711,7 +711,7 @@ function RollcartDebriefingContent() {
               {loading ? (
                 <tr>
                   <td colSpan={tableHeaders.length} className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                    Loading rollcart…
+                    Loading delivery sheet…
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (

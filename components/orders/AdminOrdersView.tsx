@@ -912,7 +912,7 @@ export default function AdminOrdersView() {
             disabled={exportingOrders || loadingOrders || selectedOrderIds.size === 0}
           />
           <ActionButton icon={UserPlus} label="Assign Rider" />
-          <ActionButton icon={FileBox} label="Rollcart" />
+          <ActionButton icon={FileBox} label="Delivery Sheet" />
           <ActionButton icon={Scale} label="Re-Weight" />
           <ActionButton
             icon={FileText}

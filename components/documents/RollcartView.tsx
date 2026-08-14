@@ -47,7 +47,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      throw new Error(parseApiErrorMessage(payload, `Failed to load rollcart (${response.status})`));
+      throw new Error(parseApiErrorMessage(payload, `Failed to load delivery sheet (${response.status})`));
     }
 
     setData(payload as DeliverySheetViewData);
@@ -65,7 +65,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
       try {
         await reload();
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load rollcart");
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load delivery sheet");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -104,7 +104,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
 
       await reload();
     } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : "Failed to remove order from rollcart");
+      setRemoveError(err instanceof Error ? err.message : "Failed to remove order from delivery sheet");
     } finally {
       setRemovingAwb(null);
     }
@@ -132,7 +132,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
       const blob = await response.blob();
       const filename = parseContentDispositionFilename(
         response.headers.get("Content-Disposition"),
-        `RollCart-${sheetId}.pdf`
+        `DeliverySheet-${sheetId}.pdf`
       );
 
       const url = URL.createObjectURL(blob);
@@ -167,14 +167,14 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
         className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 uppercase hover:text-primary"
       >
         <ArrowLeft size={14} />
-        Back to Rollcarts
+        Back to Delivery Sheets
       </Link>
 
-      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">RollCart View</h1>
+      <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Delivery Sheet View</h1>
 
       {loading && (
         <div className="py-20 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-          Loading rollcart…
+          Loading delivery sheet…
         </div>
       )}
 
@@ -189,7 +189,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
           {/* Header */}
           <div className="p-6 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4">
-            <h2 className="text-xs font-black text-slate-600 uppercase tracking-widest">Rollcart Details</h2>
+            <h2 className="text-xs font-black text-slate-600 uppercase tracking-widest">Delivery Sheet Details</h2>
             <div className="flex items-center gap-2">
               <input
                 type="text"
@@ -211,7 +211,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
           <div className="px-6 py-4 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4 bg-slate-50/20">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] font-bold text-slate-600">
               <span className="text-slate-800">
-                Rollcart with parts no {data.header.deliverySheetId} from {data.header.date}
+                Delivery Sheet with parts no {data.header.deliverySheetId} from {data.header.date}
               </span>
               <span>Headquarters in {data.header.warehouseName || "—"}</span>
               <span>Courier: {data.header.riderName || "—"}</span>
@@ -300,7 +300,7 @@ export function RollcartView({ sheetId, backHref, token, role, userId, roleId }:
                           onClick={() => handleRemoveOrder(order.awbNo)}
                           disabled={removingAwb === order.awbNo}
                           className="p-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center justify-center disabled:opacity-50"
-                          title="Remove from rollcart"
+                          title="Remove from delivery sheet"
                         >
                           <Trash2 size={14} />
                         </button>

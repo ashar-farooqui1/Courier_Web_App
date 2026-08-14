@@ -1982,7 +1982,7 @@ export async function getDeliverySheetView(
 
   if (!response.ok) {
     throw new ApiError(
-      parseApiErrorMessage(body, `Failed to fetch rollcart (${response.status})`),
+      parseApiErrorMessage(body, `Failed to fetch delivery sheet (${response.status})`),
       response.status,
       body
     );
@@ -1992,7 +1992,7 @@ export async function getDeliverySheetView(
 
   if (!payload || payload.success === false || !payload.data) {
     throw new ApiError(
-      parseApiErrorMessage(payload, 'Failed to fetch rollcart'),
+      parseApiErrorMessage(payload, 'Failed to fetch delivery sheet'),
       response.status,
       payload
     );
