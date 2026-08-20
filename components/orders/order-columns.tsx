@@ -25,11 +25,13 @@ export function formatAmount(value: number): string {
   });
 }
 
-export const ORDER_COLUMNS: {
+type OrderColumn = {
   label: string;
   render: (order: ClientOrder) => ReactNode;
   cellClassName?: string;
-}[] = [
+};
+
+export const ORDER_COLUMNS: OrderColumn[] = [
   {
     label: "AWB No",
     cellClassName: "font-bold text-primary",
@@ -93,6 +95,9 @@ export const ORDER_COLUMNS: {
   { label: "Destination City", render: (order) => order.destinationCity || "—" },
   { label: "Origin City", render: (order) => order.originCity || "—" },
   { label: "Warehouse", render: (order) => order.warehouse || "—" },
+];
+
+export const ADMIN_ONLY_ORDER_COLUMNS: OrderColumn[] = [
   {
     label: "Courier",
     render: (order) => {

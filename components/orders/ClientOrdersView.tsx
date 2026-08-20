@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +16,8 @@ import {
   Check,
   RefreshCw,
   Download,
+  ArrowLeft,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddClientOrderDialog } from "@/components/orders/AddClientOrderDialog";
@@ -203,6 +206,8 @@ export default function ClientOrdersView() {
   const initialStatusFilter: OrderStatusApiValue[] = statusParam
     ? statusParam.split(",").map((s) => s.trim()).filter(isOrderStatusApiValue)
     : [];
+  const cameFromDashboard = statusParam !== null;
+  const [showFilters, setShowFilters] = useState(!cameFromDashboard);
 
   const [modalStates, setModalStates] = useState({
     addNew: false,
@@ -661,9 +666,26 @@ export default function ClientOrdersView() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+      {cameFromDashboard && (
+        <Link
+          href="/dashboard"
+          className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 uppercase hover:text-primary"
+        >
+          <ArrowLeft size={14} />
+          Back to Dashboard
+        </Link>
+      )}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Order Details</h1>
         <div className="flex flex-wrap gap-2">
+          {cameFromDashboard && (
+            <ActionButton
+              icon={SlidersHorizontal}
+              label={showFilters ? "Hide Filters" : "Show Filters"}
+              onClick={() => setShowFilters((prev) => !prev)}
+            />
+          )}
           <ActionButton icon={Import} label="Import" onClick={() => router.push("/orders/import")} />
           <ActionButton
             icon={Download}
@@ -772,6 +794,7 @@ export default function ClientOrdersView() {
         </div>
       </Modal>
 
+      {showFilters && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <form
           onSubmit={(e) => {
@@ -870,6 +893,7 @@ export default function ClientOrdersView() {
           <Button className="w-full h-10 font-bold bg-primary text-white shadow-md">Search</Button>
         </div>
       </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-50 flex flex-wrap items-center justify-between gap-4 bg-slate-50/30">
