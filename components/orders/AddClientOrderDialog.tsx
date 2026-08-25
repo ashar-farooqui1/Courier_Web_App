@@ -101,7 +101,7 @@ export function AddClientOrderDialog({
   const [citiesError, setCitiesError] = useState<string | null>(null);
   const [selectedPickupLocationId, setSelectedPickupLocationId] = useState("");
   const [selectedServiceId, setSelectedServiceId] = useState("");
-  const [defaultWarehouseId, setDefaultWarehouseId] = useState(0);
+  const [defaultWarehouseId, setDefaultWarehouseId] = useState<number | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -292,7 +292,7 @@ export function AddClientOrderDialog({
 
     loadCities();
     loadServices();
-    setDefaultWarehouseId(getDefaultWarehouse()?.warehouseId ?? (isAdmin ? 0 : 1));
+    setDefaultWarehouseId(getDefaultWarehouse()?.warehouseId ?? null);
     if (isAdmin) {
       loadClients();
     }
@@ -405,7 +405,7 @@ export function AddClientOrderDialog({
       return;
     }
 
-    if (isAdmin && defaultWarehouseId < 1) {
+    if (isAdmin && (!defaultWarehouseId || defaultWarehouseId < 1)) {
       setSubmitError("Default warehouse not set. Logging out...");
       logout();
       return;
@@ -486,7 +486,7 @@ export function AddClientOrderDialog({
     !loadingDetails &&
     pickupDetails &&
     selectedServiceId &&
-    (!isAdmin || (effectiveClientId > 0 && defaultWarehouseId > 0));
+    (!isAdmin || (effectiveClientId > 0 && (defaultWarehouseId ?? 0) > 0));
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-in fade-in duration-200">

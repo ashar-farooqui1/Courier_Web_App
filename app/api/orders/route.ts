@@ -19,6 +19,12 @@ function readNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function readNullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function readBoolean(value: unknown): boolean {
   return value === true || value === 'true';
 }
@@ -91,7 +97,7 @@ export async function POST(request: Request) {
 
     const requestedClientId = readNumber(body.clientId);
     const pickupLocationId = readNumber(body.pickupLocationId);
-    const warehouseId = readNumber(body.warehouseId);
+    const warehouseId = readNullableNumber(body.warehouseId);
     const serviceId = readNumber(body.serviceId);
     const originCityId = readNumber(body.originCityId);
     const destinationCityId = readNumber(body.destinationCityId);
@@ -112,7 +118,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Please select a pickup location' }, { status: 400 });
     }
 
-    if (isAdminRole(ctx.role) && warehouseId < 1) {
+    if (isAdminRole(ctx.role) && (warehouseId == null || warehouseId < 1)) {
       return NextResponse.json({ message: 'Default warehouse not set. Please log in again.' }, { status: 400 });
     }
 

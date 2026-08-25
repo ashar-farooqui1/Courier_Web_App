@@ -94,7 +94,7 @@ export const ORDER_COLUMNS: OrderColumn[] = [
   { label: "Rider", render: (order) => order.riderName || "—" },
   { label: "Destination City", render: (order) => order.destinationCity || "—" },
   { label: "Origin City", render: (order) => order.originCity || "—" },
-  { label: "Warehouse", render: (order) => order.warehouse || "—" },
+  { label: "Warehouse", render: (order) => order.warehouseLabel?.trim() || order.warehouse || "—" },
 ];
 
 export const ADMIN_ONLY_ORDER_COLUMNS: OrderColumn[] = [

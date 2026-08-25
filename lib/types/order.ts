@@ -12,7 +12,7 @@ export interface OrderPickupLocationDetails {
 export interface CreateOrderPayload {
   clientId: number;
   pickupLocationId: number;
-  warehouseId: number;
+  warehouseId: number | null;
   serviceId: number;
   serviceName: string;
   originAddress: string;
@@ -76,6 +76,7 @@ export interface ClientOrder {
   destinationCity: string;
   originCity: string;
   warehouse: string;
+  warehouseLabel: string;
   courierId: number;
   courierTrackingNo: string;
   courierName: string;

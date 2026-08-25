@@ -246,6 +246,7 @@ export function normalizeClientOrder(raw: unknown): ClientOrder | null {
     destinationCity: pickString(record, ['destinationCity', 'DestinationCity']),
     originCity: pickString(record, ['originCity', 'OriginCity']),
     warehouse: pickString(record, ['warehouse', 'Warehouse']),
+    warehouseLabel: pickString(record, ['warehouseLabel', 'WarehouseLabel']),
     courierId: pickNumber(record, ['courierId', 'CourierId']),
     courierTrackingNo: pickString(record, ['courierTrackingNo', 'CourierTrackingNo']),
     courierName: pickString(record, ['courierName', 'CourierName']),
