@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import { createAdminFormData, getAllAdmins } from "@/lib/api/admin";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 
-const CREATE_ADMIN_ROLE_ID = 2;
-
 export async function GET() {
   try {
     const admins = await getAllAdmins();
@@ -22,12 +20,15 @@ export async function POST(request: Request) {
     const cnic = String(formData.get("CNIC") ?? "").trim();
     const contactNumber = String(formData.get("ContactNumber") ?? "").trim();
     const adminEmail = String(formData.get("AdminEmail") ?? "").trim();
+    const roleId = Number(formData.get("RoleId"));
 
     if (!adminName || !cnic || !contactNumber || !adminEmail) {
       return NextResponse.json({ error: "Required fields are missing" }, { status: 400 });
     }
 
-    formData.set("RoleId", String(CREATE_ADMIN_ROLE_ID));
+    if (!Number.isInteger(roleId) || roleId < 1) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
 
     const result = await createAdminFormData(formData);
     return NextResponse.json(result);

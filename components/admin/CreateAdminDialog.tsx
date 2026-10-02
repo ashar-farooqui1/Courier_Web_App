@@ -9,9 +9,9 @@ import {
   DialogFormFooter,
 } from "@/components/ui/AppDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
+import type { Role } from "@/types/role";
 import type { Warehouse } from "@/lib/types/warehouse";
 
-const ADMIN_ROLE_ID = 2;
 const FORM_ID = "create-admin-form";
 
 const emptyForm: AdminFormValues = {
@@ -20,7 +20,7 @@ const emptyForm: AdminFormValues = {
   contactNumber: "",
   adminEmail: "",
   designation: "",
-  roleId: String(ADMIN_ROLE_ID),
+  roleId: "",
 };
 
 interface CreateAdminDialogProps {
@@ -38,6 +38,8 @@ export default function CreateAdminDialog({
   const [adminImage, setAdminImage] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loadingWarehouses, setLoadingWarehouses] = useState(false);
   const [selectedWarehouseIds, setSelectedWarehouseIds] = useState<number[]>([]);
@@ -49,6 +51,26 @@ export default function CreateAdminDialog({
     setError(null);
     setSubmitting(false);
     setSelectedWarehouseIds([]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const loadRoles = async () => {
+      setLoadingRoles(true);
+      try {
+        const response = await fetch("/api/roles");
+        if (!response.ok) throw new Error("Failed to load roles");
+        const data: Role[] = await response.json();
+        setRoles(Array.isArray(data) ? data : []);
+      } catch {
+        setRoles([]);
+      } finally {
+        setLoadingRoles(false);
+      }
+    };
+
+    loadRoles();
   }, [isOpen]);
 
   useEffect(() => {
@@ -83,7 +105,7 @@ export default function CreateAdminDialog({
     formData.append("ContactNumber", values.contactNumber.trim());
     formData.append("AdminEmail", values.adminEmail.trim());
     formData.append("Designation", values.designation.trim());
-    formData.append("RoleId", String(ADMIN_ROLE_ID));
+    formData.append("RoleId", values.roleId);
     selectedWarehouseIds.forEach((id) => formData.append("WarehouseIds", String(id)));
     if (adminImage) {
       formData.append("AdminImage", adminImage);
@@ -138,6 +160,9 @@ export default function CreateAdminDialog({
             onChange={setField}
             adminImage={adminImage}
             onImageChange={setAdminImage}
+            showRole
+            roles={roles}
+            loadingRoles={loadingRoles}
             showWarehouses
             warehouses={warehouses}
             loadingWarehouses={loadingWarehouses}
