@@ -16,7 +16,8 @@ function isLoginRole(value: string | null): value is LoginRole {
     value === 'client' ||
     value === 'admin' ||
     value === 'super-admin' ||
-    value === 'rider'
+    value === 'rider' ||
+    value === 'sale-manager'
   );
 }
 

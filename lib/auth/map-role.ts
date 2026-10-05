@@ -5,6 +5,7 @@ const ROLE_NAME_TO_LOGIN: Record<string, LoginRole> = {
   admin: "admin",
   client: "client",
   rider: "rider",
+  salemanager: "sale-manager",
 };
 
 const LOGIN_TO_ROLE_NAME: Record<LoginRole, string> = {
@@ -12,6 +13,7 @@ const LOGIN_TO_ROLE_NAME: Record<LoginRole, string> = {
   admin: "Admin",
   client: "Client",
   rider: "Rider",
+  "sale-manager": "SaleManager",
 };
 
 export function normalizeRoleName(roleName: string): string {

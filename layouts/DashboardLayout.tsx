@@ -88,7 +88,13 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     user?.displayName ||
     user?.email ||
     username ||
-    (role === "super-admin" ? "Super Admin" : role === "rider" ? "Rider" : role);
+    (role === "super-admin"
+      ? "Super Admin"
+      : role === "rider"
+      ? "Rider"
+      : role === "sale-manager"
+      ? "Sale Manager"
+      : role);
 
   const headerCity = "Karachi";
   const profileCity = "Lahore";

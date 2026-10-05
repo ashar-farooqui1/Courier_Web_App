@@ -2,7 +2,7 @@ import { mapRoleNameToLoginRole } from "@/lib/auth/map-role";
 import { clearDefaultWarehouse } from "@/lib/auth/warehouse";
 import type { AuthUser } from "@/lib/types/user";
 
-export type LoginRole = "client" | "admin" | "super-admin" | "rider";
+export type LoginRole = "client" | "admin" | "super-admin" | "rider" | "sale-manager";
 
 const ROLE_KEY = "courier_login_role";
 const USER_KEY = "courier_auth_user";
@@ -13,7 +13,13 @@ const SESSION_KEYS = [ROLE_KEY, USER_KEY, TOKEN_KEY] as const;
 
 function readSessionFrom(storage: Storage): AuthSession | null {
   const role = storage.getItem(ROLE_KEY);
-  if (role !== "client" && role !== "admin" && role !== "super-admin" && role !== "rider") {
+  if (
+    role !== "client" &&
+    role !== "admin" &&
+    role !== "super-admin" &&
+    role !== "rider" &&
+    role !== "sale-manager"
+  ) {
     return null;
   }
 
