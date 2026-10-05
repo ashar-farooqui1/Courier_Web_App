@@ -69,8 +69,44 @@ export async function updateAdmin(
 }
 
 export interface CreateAdminResult {
-  adminId: number;
+  adminId?: number;
   message?: string;
+}
+
+interface CreateAdminApiResponse {
+  success?: boolean;
+  Success?: boolean;
+  message?: string | null;
+  Message?: string | null;
+  adminId?: number | string;
+  AdminId?: number | string;
+  data?: unknown;
+  Data?: unknown;
+}
+
+function readInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
+function readCreatedAdminId(data: CreateAdminApiResponse): number | undefined {
+  const direct = readInteger(data.adminId) ?? readInteger(data.AdminId);
+  if (direct !== null) return direct;
+
+  const nested = data.data ?? data.Data;
+  const nestedId = readInteger(nested);
+  if (nestedId !== null) return nestedId;
+
+  if (nested && typeof nested === "object") {
+    const record = nested as Record<string, unknown>;
+    return readInteger(record.adminId) ?? readInteger(record.AdminId) ?? undefined;
+  }
+
+  return undefined;
 }
 
 export async function deleteAdmin(adminId: number): Promise<string> {
@@ -82,16 +118,50 @@ export async function deleteAdmin(adminId: number): Promise<string> {
   }
 }
 
+export interface AssignClientPayload {
+  adminId: number;
+  clientId: number;
+  assignBy: number;
+}
+
+interface AssignClientApiResponse {
+  success?: boolean;
+  message?: string | null;
+}
+
+export async function assignClientToSaleManager(
+  payload: AssignClientPayload,
+  token?: string
+): Promise<string> {
+  try {
+    const data = await apiPostJson<AssignClientApiResponse>(API_ROUTES.assignClient, payload, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+
+    if (data?.success === false) {
+      throw new Error(data.message || "Failed to assign client");
+    }
+
+    return data?.message || "Client assigned successfully";
+  } catch (err) {
+    throw toAdminError(err, "Failed to assign client");
+  }
+}
+
 export async function createAdminFormData(formData: FormData): Promise<CreateAdminResult> {
   try {
-    const data = await apiPostForm<{ adminId?: number; message?: string }>(
-      API_ROUTES.createAdmin,
-      formData
-    );
-    if (typeof data.adminId !== "number") {
-      throw new Error("Invalid response from server");
+    const data = await apiPostForm<CreateAdminApiResponse>(API_ROUTES.createAdmin, formData);
+    const success = data.success ?? data.Success;
+    const message = data.message ?? data.Message ?? undefined;
+
+    if (success === false) {
+      throw new Error(message || "Failed to create admin");
     }
-    return { adminId: data.adminId, message: data.message };
+
+    return {
+      adminId: readCreatedAdminId(data),
+      message: message || "Admin created successfully",
+    };
   } catch (err) {
     throw toAdminError(err, "Failed to create admin");
   }

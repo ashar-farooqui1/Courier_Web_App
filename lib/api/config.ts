@@ -115,6 +115,7 @@ export const API_ROUTES = {
 
   admins: "/api/Admin/GetAllAdmin",
   createAdmin: "/api/Admin/CreateAdmin",
+  assignClient: "/api/Admin/AssignClient",
   adminById: (adminId: number | string) => `/api/Admin/admin/${adminId}`,
   adminSettings: "/api/Admin/settings",
 

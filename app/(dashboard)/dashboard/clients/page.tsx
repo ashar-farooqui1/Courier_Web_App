@@ -2,11 +2,14 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Trash2, Plus, Edit2, X, Layers, MapPin } from 'lucide-react';
+import { Trash2, Plus, Edit2, X, Layers, MapPin, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatStatusLabel } from '@/lib/format';
 import type { Client } from '@/lib/types/client';
+import type { Admin } from '@/types/admin';
+import { AssignClientDialog } from '@/components/clients/AssignClientDialog';
 import { EditClientDialog } from '@/components/clients/EditClientDialog';
+import { useAuthSession } from '@/hooks/useAuthRole';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   emptyClientSearchFilters,
@@ -18,11 +21,15 @@ import {
 const tableHeaders = [
   'Action', 'Status', 'Client ID', 'Brand Name', 'Client Name', 'POC #', 'Contact #',
   'Client Logo', 'Client Email', 'Client Billing Address', 'Client Pickup Address',
-  'Base Town', 'City',
+  'Base Town', 'City', 'Sale Manager',
 ] as const;
 
 export default function ClientsPage() {
+  const { role, ready } = useAuthSession();
+  const isSuperAdmin = ready && role === 'super-admin';
   const [clients, setClients] = useState<Client[]>([]);
+  const [admins, setAdmins] = useState<Admin[]>([]);
+  const [clientToAssign, setClientToAssign] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editClientId, setEditClientId] = useState<number | null>(null);
@@ -57,6 +64,16 @@ export default function ClientsPage() {
   useEffect(() => {
     fetchClients();
   }, [fetchClients]);
+
+  useEffect(() => {
+    fetch('/api/admin')
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = (await response.json()) as Admin[];
+        setAdmins(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setAdmins([]));
+  }, []);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -149,6 +166,23 @@ export default function ClientsPage() {
         isOpen={editClientId !== null}
         onClose={() => setEditClientId(null)}
         onSuccess={handleClientSaved}
+      />
+      <AssignClientDialog
+        client={clientToAssign}
+        isOpen={clientToAssign !== null}
+        onClose={() => setClientToAssign(null)}
+        onSuccess={(message, adminId) => {
+          if (clientToAssign) {
+            setClients((prev) =>
+              prev.map((item) =>
+                item.clientId === clientToAssign.clientId
+                  ? { ...item, salesPersonId: adminId }
+                  : item
+              )
+            );
+          }
+          handleClientSaved(message);
+        }}
       />
       <ConfirmDialog
         isOpen={clientToDelete !== null}
@@ -354,6 +388,17 @@ export default function ClientsPage() {
                         >
                           <MapPin size={12} />
                         </Link>
+                        {isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setClientToAssign(client)}
+                            className="p-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors flex items-center justify-center"
+                            aria-label="Assign sale manager"
+                            title="Assign sale manager"
+                          >
+                            <UserPlus size={12} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => openDeleteConfirm(client)}
@@ -399,6 +444,9 @@ export default function ClientsPage() {
                     <td className="p-4 align-top text-[10px] max-w-[150px] whitespace-normal">{client.clientPickupAddress}</td>
                     <td className="p-4 align-top text-[10px]">{client.baseTown}</td>
                     <td className="p-4 align-top text-[10px]">{client.city}</td>
+                    <td className="p-4 align-top text-[10px]">
+                      {admins.find((admin) => admin.adminId === client.salesPersonId)?.adminName ?? '—'}
+                    </td>
                   </tr>
                 ))
               )}
