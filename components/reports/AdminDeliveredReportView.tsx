@@ -8,6 +8,7 @@ import { PageSizeSelect, OrdersPaginationFooter } from "@/components/orders/Orde
 import { formatAmount, formatOrderDate } from "@/components/orders/order-columns";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { exportOrdersToCsv } from "@/lib/orders/order-export";
@@ -109,7 +110,7 @@ export default function AdminDeliveredReportView() {
   const loadClients = useCallback(async () => {
     setLoadingClients(true);
     try {
-      const response = await fetch("/api/clients");
+      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
       const payload = (await response.json().catch(() => null)) as Client[] | null;
       setClients(response.ok && Array.isArray(payload) ? payload : []);
     } catch {

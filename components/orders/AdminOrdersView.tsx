@@ -33,6 +33,7 @@ const ORDER_COLUMNS = [...BASE_ORDER_COLUMNS, ...ADMIN_ONLY_ORDER_COLUMNS];
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
@@ -304,7 +305,7 @@ export default function AdminOrdersView() {
     setClientsError(null);
 
     try {
-      const response = await fetch("/api/clients");
+      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
       const payload = (await response.json().catch(() => null)) as
         | Client[]
         | { message?: string }

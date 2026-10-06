@@ -62,8 +62,12 @@ async function parseClientMutationResponse(
   return body.message ?? successMessage;
 }
 
-export async function getClients(): Promise<Client[]> {
-  const response = await apiGet<ClientsApiResponse<Client[]> | Client[]>(API_ROUTES.clients);
+export async function getClients(adminId?: number): Promise<Client[]> {
+  const path =
+    Number.isInteger(adminId) && (adminId as number) > 0
+      ? `${API_ROUTES.clients}?adminId=${adminId}`
+      : API_ROUTES.clients;
+  const response = await apiGet<ClientsApiResponse<Client[]> | Client[]>(path);
   return unwrapClientsList(response);
 }
 

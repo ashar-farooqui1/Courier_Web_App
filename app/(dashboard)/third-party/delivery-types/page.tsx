@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowRight, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatStatusLabel } from '@/lib/format';
+import { buildClientsRequestHeaders } from '@/lib/clients/clients-request';
 import type { Client } from '@/lib/types/client';
 
 export default function DeliveryTypesClientsPage() {
@@ -17,7 +18,7 @@ export default function DeliveryTypesClientsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/clients');
+      const response = await fetch('/api/clients', { headers: buildClientsRequestHeaders() });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
         throw new Error(payload?.message ?? `Failed to load clients (${response.status})`);

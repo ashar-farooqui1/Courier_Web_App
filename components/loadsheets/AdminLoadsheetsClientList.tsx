@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { FileStack, X } from "lucide-react";
+import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
 import type { Client } from "@/lib/types/client";
 
 export default function AdminLoadsheetsClientList() {
@@ -15,7 +16,7 @@ export default function AdminLoadsheetsClientList() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/clients");
+      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         const message = payload && !Array.isArray(payload) ? payload.message : undefined;

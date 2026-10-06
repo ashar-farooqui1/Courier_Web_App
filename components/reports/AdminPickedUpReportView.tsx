@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageSizeSelect, OrdersPaginationFooter } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
+import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { formatAmount, formatOrderDate } from "@/components/orders/order-columns";
 import { formatArrivalAt, formatTimeOfDay } from "@/lib/format";
@@ -122,7 +123,7 @@ export default function AdminPickedUpReportView() {
     setLoadingLookups(true);
     try {
       const [clientsRes, ridersRes, citiesRes] = await Promise.all([
-        fetch("/api/clients"),
+        fetch("/api/clients", { headers: buildClientsRequestHeaders() }),
         fetch("/api/riders"),
         fetch("/api/cities"),
       ]);

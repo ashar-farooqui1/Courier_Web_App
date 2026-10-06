@@ -10,6 +10,7 @@ import type { Admin } from '@/types/admin';
 import { AssignClientDialog } from '@/components/clients/AssignClientDialog';
 import { EditClientDialog } from '@/components/clients/EditClientDialog';
 import { useAuthSession } from '@/hooks/useAuthRole';
+import { buildClientsRequestHeaders } from '@/lib/clients/clients-request';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   emptyClientSearchFilters,
@@ -44,7 +45,7 @@ export default function ClientsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/clients');
+      const response = await fetch('/api/clients', { headers: buildClientsRequestHeaders() });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as {
           message?: string;
