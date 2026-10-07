@@ -3,7 +3,7 @@ import { updateOrderStatus } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
 import { isOrderStatusApiValue } from '@/lib/orders/order-status-options';
 import { readAppRequestContext } from '@/lib/api/app-request-context';
-import { isAdminRole } from '@/lib/auth/role';
+import { isStaffRole } from '@/lib/auth/role';
 
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get('Authorization');
@@ -54,7 +54,7 @@ export async function PUT(request: Request) {
     }
 
     const ctx = readAppRequestContext(request);
-    const adminId = isAdminRole(ctx.role) ? ctx.userId : 0;
+    const adminId = isStaffRole(ctx.role) ? ctx.userId : 0;
 
     const message = await updateOrderStatus({ orderIds, status, adminId }, token);
     return NextResponse.json({ success: true, message });

@@ -4,7 +4,7 @@ import React, { Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useAuthSession } from "@/hooks/useAuthRole";
-import { isAdminRole, isClientRole } from "@/lib/auth/role";
+import { isClientRole, isStaffRole } from "@/lib/auth/role";
 import { OrderImportView } from "@/components/orders/OrderImportView";
 import { ArrowLeft } from "lucide-react";
 
@@ -54,7 +54,7 @@ export default function OrderImportPage() {
     return <LoadingState />;
   }
 
-  if (isAdminRole(role)) {
+  if (isStaffRole(role)) {
     return (
       <Suspense fallback={<LoadingState />}>
         <AdminOrderImport />

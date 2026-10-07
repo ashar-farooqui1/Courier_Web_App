@@ -6,7 +6,7 @@ import { parseApiErrorMessage } from '@/lib/api/errors';import {
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
-import { isAdminRole } from '@/lib/auth/role';
+import { isStaffRole } from '@/lib/auth/role';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Please select a pickup location' }, { status: 400 });
     }
 
-    if (isAdminRole(ctx.role) && (warehouseId == null || warehouseId < 1)) {
+    if (isStaffRole(ctx.role) && (warehouseId == null || warehouseId < 1)) {
       return NextResponse.json({ message: 'Default warehouse not set. Please log in again.' }, { status: 400 });
     }
 

@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AppSidebar from "@/components/SidebarClient";
 import { AdminProfileMenu } from "@/components/admin/AdminProfileMenu";
 import { DefaultWarehouseDialog } from "@/components/admin/DefaultWarehouseDialog";
 import { MapPin, User } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuthRole";
-import { isAdminRole } from "@/lib/auth/role";
+import { isAdminRole, isSaleManagerRole, isStaffRole } from "@/lib/auth/role";
+import { canSaleManagerAccess } from "@/lib/auth/sale-manager-access";
 import { saveDefaultWarehouse } from "@/lib/auth/warehouse";
 import type { Warehouse } from "@/lib/types/warehouse";
 
@@ -17,6 +18,7 @@ interface DashboardLayoutProps {
 
 const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const router = useRouter();
+  const pathname = usePathname();
   const { role, user, username, ready } = useAuthSession();
   const [showWarehouseDialog, setShowWarehouseDialog] = useState(false);
   const [adminWarehouses, setAdminWarehouses] = useState<Warehouse[]>([]);
@@ -29,8 +31,16 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     }
   }, [ready, role, router]);
 
+  const saleManagerBlocked = isSaleManagerRole(role) && !canSaleManagerAccess(pathname);
+
   useEffect(() => {
-    if (!ready || !isAdminRole(role) || !user?.userId) return;
+    if (ready && saleManagerBlocked) {
+      router.replace("/dashboard");
+    }
+  }, [ready, saleManagerBlocked, router]);
+
+  useEffect(() => {
+    if (!ready || !isStaffRole(role) || !user?.userId) return;
 
     let cancelled = false;
     setLoadingAdminWarehouses(true);
@@ -128,7 +138,9 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <p className="text-[11px] font-bold leading-none uppercase tracking-tighter">
                   {displayName}
                 </p>
-                <p className="text-[9px] text-white/70 font-medium">Available</p>
+                <p className="text-[9px] text-white/70 font-medium">
+                  {isSaleManagerRole(role) ? "Sale Manager" : "Available"}
+                </p>
               </div>
               <div className="w-8 h-8 rounded-full bg-white/20 border border-white/30 flex items-center justify-center overflow-hidden">
                 <User size={20} className="text-white" />
@@ -137,7 +149,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           )}
         </header>
 
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-y-auto">{saleManagerBlocked ? null : children}</main>
 
         <footer className="px-6 py-4 bg-white border-t border-slate-100 flex justify-between items-center text-[10px] text-slate-400 font-medium uppercase tracking-widest">
           <p>COPYRIGHT © 2026 STALLIONEX COURIER, All rights Reserved</p>

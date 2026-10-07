@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useAuthSession } from "@/hooks/useAuthRole";
-import { isClientRole } from "@/lib/auth/role";
+import { isClientRole, isSaleManagerRole } from "@/lib/auth/role";
 
 const AdminSidebar = dynamic(() => import("@/components/Sidebar"), {
   ssr: false,
@@ -10,6 +10,11 @@ const AdminSidebar = dynamic(() => import("@/components/Sidebar"), {
 });
 
 const ClientSidebar = dynamic(() => import("@/components/ClientSidebar"), {
+  ssr: false,
+  loading: () => <SidebarPlaceholder />,
+});
+
+const SaleManagerSidebar = dynamic(() => import("@/components/SaleManagerSidebar"), {
   ssr: false,
   loading: () => <SidebarPlaceholder />,
 });
@@ -28,5 +33,6 @@ export default function AppSidebar() {
 
   if (!ready) return <SidebarPlaceholder />;
   if (isClientRole(role)) return <ClientSidebar />;
+  if (isSaleManagerRole(role)) return <SaleManagerSidebar />;
   return <AdminSidebar />;
 }

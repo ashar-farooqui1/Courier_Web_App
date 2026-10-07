@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useAuthSession } from "@/hooks/useAuthRole";
-import { isAdminRole, isClientRole } from "@/lib/auth/role";
+import { isClientRole, isStaffRole } from "@/lib/auth/role";
 import ClientOrdersView from "@/components/orders/ClientOrdersView";
 import AdminOrdersView from "@/components/orders/AdminOrdersView";
 
@@ -17,7 +17,7 @@ export default function OrderDetailsPage() {
     );
   }
 
-  if (isAdminRole(role)) {
+  if (isStaffRole(role)) {
     return <AdminOrdersView />;
   }
 

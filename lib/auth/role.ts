@@ -142,10 +142,20 @@ export function isAdminRole(role: LoginRole | null): boolean {
   return role === "admin" || role === "super-admin";
 }
 
+/** Sale Manager (backend RoleId 5) — an Admin record limited to Dashboard, Orders and Return Documents. */
+export function isSaleManagerRole(role: LoginRole | null): boolean {
+  return role === "sale-manager";
+}
+
+/** Roles that use the admin-side screens (orders, warehouses, documents). */
+export function isStaffRole(role: LoginRole | null): boolean {
+  return isAdminRole(role) || isSaleManagerRole(role);
+}
+
 /** Logged-in admin id from auth session (localStorage / sessionStorage). */
 export function getStoredAdminId(): number {
   const session = getAuthSession();
-  if (!session || !isAdminRole(session.role)) return 0;
+  if (!session || !isStaffRole(session.role)) return 0;
 
   const adminId = session.user.userId;
   return Number.isInteger(adminId) && adminId > 0 ? adminId : 0;
