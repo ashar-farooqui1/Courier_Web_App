@@ -6,7 +6,7 @@ import { parseApiErrorMessage } from '@/lib/api/errors';import {
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
-import { isStaffRole } from '@/lib/auth/role';
+import { isSaleManagerRole, isStaffRole } from '@/lib/auth/role';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -63,6 +63,21 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (isSaleManagerRole(ctx.role)) {
+      if (ctx.userId < 1) {
+        return NextResponse.json(
+          { message: 'Session not found. Please log in again.' },
+          { status: 403 }
+        );
+      }
+
+      const orders = await getOrders(token, ctx.userId);
+      const filtered = scoped.clientId
+        ? orders.filter((order) => order.clientId === scoped.clientId)
+        : orders;
+      return NextResponse.json(filtered);
+    }
+
     const orders = scoped.clientId
       ? await getOrdersByClient(scoped.clientId, token)
       : await getOrders(token);

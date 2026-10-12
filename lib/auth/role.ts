@@ -142,7 +142,7 @@ export function isAdminRole(role: LoginRole | null): boolean {
   return role === "admin" || role === "super-admin";
 }
 
-/** Sale Manager (backend RoleId 5) — an Admin record limited to Dashboard, Orders and Return Documents. */
+/** Sale Manager (backend RoleId 5) — Dashboard, Orders, Clients, and Return Documents. */
 export function isSaleManagerRole(role: LoginRole | null): boolean {
   return role === "sale-manager";
 }

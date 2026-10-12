@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, FileText, FileStack, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, FileText, FileStack, LogOut, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AppLogo from "@/components/AppLogo";
 import { logout } from "@/lib/auth/role";
@@ -19,6 +19,7 @@ interface SaleManagerNavItem {
 
 const SALE_MANAGER_NAV: SaleManagerNavItem[] = [
   { icon: <LayoutDashboard size={20} />, label: "Dashboard", href: "/dashboard", exact: true },
+  { icon: <UserCheck size={20} />, label: "Client", href: "/dashboard/clients", exact: true },
   { icon: <Package size={20} />, label: "Orders", href: "/orders/details" },
   { icon: <FileText size={20} />, label: "Return Document", href: "/documents/return", exact: true },
   {

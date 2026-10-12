@@ -326,9 +326,13 @@ async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientO
   }
 }
 
-/** GET /api/Order/GetOrders — all orders (admin view, no client filter) */
-export async function getOrders(token?: string): Promise<ClientOrder[]> {
-  return fetchOrdersFromApi(API_ROUTES.orders, token);
+/** GET /api/Order/GetOrders — all orders. Pass adminId to limit the list to a Sale Manager. */
+export async function getOrders(token?: string, adminId?: number): Promise<ClientOrder[]> {
+  const path =
+    Number.isInteger(adminId) && (adminId as number) > 0
+      ? `${API_ROUTES.orders}?adminId=${adminId}`
+      : API_ROUTES.orders;
+  return fetchOrdersFromApi(path, token);
 }
 
 /** GET /api/Order/GetOrdersByClient?clientId={clientId} — client's own orders */
