@@ -72,10 +72,13 @@ export async function GET(request: Request) {
       }
 
       const orders = await getOrders(token, ctx.userId);
-      const filtered = scoped.clientId
-        ? orders.filter((order) => order.clientId === scoped.clientId)
-        : orders;
-      return NextResponse.json(filtered);
+      if (!scoped.clientId) {
+        return NextResponse.json(orders);
+      }
+
+      const clientOrders = await getOrdersByClient(scoped.clientId, token);
+      const allowedIds = new Set(orders.map((order) => order.orderId));
+      return NextResponse.json(clientOrders.filter((order) => allowedIds.has(order.orderId)));
     }
 
     const orders = scoped.clientId
