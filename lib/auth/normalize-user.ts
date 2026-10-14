@@ -49,7 +49,11 @@ export function normalizeAuthUser(data: LoginResponseData, fallbackEmail: string
 
   if (normalizedRole === "client") {
     userIdKeys = ["clientId", "ClientId", "userId", "id"];
-  } else if (normalizedRole === "admin" || normalizedRole === "superadmin") {
+  } else if (
+    normalizedRole === "admin" ||
+    normalizedRole === "superadmin" ||
+    normalizedRole === "salemanager"
+  ) {
     userIdKeys = ["adminId", "AdminId", "userId", "id"];
   } else if (normalizedRole === "rider") {
     userIdKeys = ["riderId", "RiderId", "userId", "id"];

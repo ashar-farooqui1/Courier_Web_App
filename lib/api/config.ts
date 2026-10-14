@@ -37,7 +37,7 @@ export const API_ROUTES = {
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
   orderById: (orderId: number | string) => `/api/Order/GetOrderById?orderId=${orderId}`,
   createOrder: "/api/Order/CreateOrder",
-  /** No clientId filter support on the backend — always returns every order. */
+  /** All orders. Sale Manager calls this with `?adminId=`. */
   orders: "/api/Order/GetOrders",
   /** Only endpoint that actually filters by client. Used for both the client role and admin per-client views. */
   ordersForClient: (clientId: number | string) =>
