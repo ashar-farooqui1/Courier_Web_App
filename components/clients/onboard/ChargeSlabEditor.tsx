@@ -11,6 +11,11 @@ interface ChargeSlabEditorProps {
   onChange: (slabs: DeliveryChargeSlab[]) => void;
 }
 
+/** type="number" still accepts e / E / + / - — block them so weight and charges stay positive numbers. */
+const blockNonNumericKeys = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+};
+
 export function ChargeSlabEditor({ title, slabs, onChange }: ChargeSlabEditorProps) {
   const updateSlab = (index: number, field: keyof DeliveryChargeSlab, value: string) => {
     onChange(
@@ -38,13 +43,14 @@ export function ChargeSlabEditor({ title, slabs, onChange }: ChargeSlabEditorPro
         {slabs.map((slab, index) => (
           <div key={index} className="flex items-center gap-2">
             <div className="flex-1 space-y-1">
-              <label className={dialogLabelClass}>Weight</label>
+              <label className={dialogLabelClass}>Weight (kg)</label>
               <input
                 type="number"
                 step="0.1"
-                min={0}
+                min={0.1}
                 value={slab.weight}
                 onChange={(e) => updateSlab(index, "weight", e.target.value)}
+                onKeyDown={blockNonNumericKeys}
                 className={dialogInputClass}
               />
             </div>
@@ -53,9 +59,10 @@ export function ChargeSlabEditor({ title, slabs, onChange }: ChargeSlabEditorPro
               <input
                 type="number"
                 step="0.01"
-                min={0}
+                min={1}
                 value={slab.charges}
                 onChange={(e) => updateSlab(index, "charges", e.target.value)}
+                onKeyDown={blockNonNumericKeys}
                 className={dialogInputClass}
               />
             </div>

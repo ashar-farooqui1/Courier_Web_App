@@ -9,9 +9,20 @@ import {
   DialogFormFooter,
   DialogLoading,
 } from '@/components/ui/AppDialog';
-import { buildClientUpdatePayload, clientToFormValues } from '@/lib/clients/client-form';
+import {
+  CLIENT_FIELD_RULES,
+  buildClientUpdatePayload,
+  clientToFormValues,
+} from '@/lib/clients/client-form';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import type { CreateClientFormValues } from '@/lib/types/create-client';
+import {
+  FIX_FIELDS_MESSAGE,
+  clearFieldError,
+  hasErrors,
+  validateFields,
+  type FieldErrors,
+} from '@/lib/validation';
 import type { Client } from '@/lib/types/client';
 
 interface EditClientDialogProps {
@@ -35,6 +46,7 @@ export function EditClientDialog({
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CreateClientFormValues>>({});
 
   useEffect(() => {
     if (!isOpen || clientId === null) return;
@@ -47,6 +59,7 @@ export function EditClientDialog({
       setSubmitError(null);
       setLogoFile(null);
       setValues(null);
+      setFieldErrors({});
 
       try {
         const response = await fetch(`/api/clients/${clientId}`);
@@ -78,11 +91,19 @@ export function EditClientDialog({
 
   const setField = (field: keyof CreateClientFormValues, value: string) => {
     setValues((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setFieldErrors((prev) => clearFieldError(prev, field));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!values || clientId === null) return;
+
+    const errors = validateFields(values, CLIENT_FIELD_RULES);
+    setFieldErrors(errors);
+    if (hasErrors(errors)) {
+      setSubmitError(FIX_FIELDS_MESSAGE);
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -161,7 +182,7 @@ export function EditClientDialog({
           <DialogError message={loadError} />
         </DialogBody>
       ) : values ? (
-        <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+        <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 flex-1">
           <DialogBody>
             {submitError && <DialogError message={submitError} />}
             <ClientFormFields
@@ -169,6 +190,7 @@ export function EditClientDialog({
               onChange={setField}
               logoFile={logoFile}
               onLogoChange={setLogoFile}
+              errors={fieldErrors}
             />
           </DialogBody>
         </form>

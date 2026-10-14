@@ -13,6 +13,16 @@ import type { City } from "@/lib/types/city";
 import type { Client } from "@/lib/types/client";
 import type { PickupLocation } from "@/lib/types/pickup-location";
 import type { Service } from "@/lib/types/service";
+import { FieldError, fieldErrorInputClass } from "@/components/ui/FieldError";
+import {
+  FIX_FIELDS_MESSAGE,
+  clearFieldError,
+  hasErrors,
+  rules,
+  sanitize,
+  validateFields,
+  type FieldErrors,
+} from "@/lib/validation";
 
 function unwrapServices(payload: unknown): Service[] {
   if (Array.isArray(payload)) {
@@ -51,13 +61,42 @@ const initialForm = {
   isReplacement: false,
 };
 
+type OrderFormErrors = FieldErrors<
+  typeof initialForm & { clientId: string; pickupLocationId: string; serviceId: string }
+>;
+
+/** Input filters applied while typing so a field can never hold the wrong kind of value. */
+const ORDER_FIELD_SANITIZERS: Partial<Record<keyof typeof initialForm, (value: string) => string>> = {
+  customerName: sanitize.name,
+  customerPhone: sanitize.phone,
+  amount: (value) => sanitize.decimal(value, 2),
+  quantity: (value) => sanitize.digits(value, 4),
+  weight: (value) => sanitize.decimal(value, 2),
+};
+
+const ORDER_FIELD_RULES = {
+  customerName: rules.name("Customer name", { required: true }),
+  customerPhone: rules.mobile("Customer phone", { required: true }),
+  customerReference: rules.text("Customer reference", { min: 1, max: 50 }),
+  deliveryAddress: rules.address("Delivery address", { required: true }),
+  destinationCityId: rules.selected("Destination city"),
+  area: rules.text("Area", { max: 100 }),
+  productName: rules.text("Product name", { max: 150 }),
+  amount: rules.amount("COD amount", { required: true }),
+  quantity: rules.integer("Quantity", { required: true, min: 1, max: 1000 }),
+  weight: rules.weight("Weight", { required: true, max: 100 }),
+  customerRemarks: rules.text("Customer remarks", { min: 1, max: 500 }),
+};
+
 function FormField({
   label,
   required = false,
+  error,
   children,
 }: {
   label: string;
   required?: boolean;
+  error?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -66,6 +105,7 @@ function FormField({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
+      <FieldError message={error} />
     </div>
   );
 }
@@ -108,6 +148,7 @@ export function AddClientOrderDialog({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [pickupDetails, setPickupDetails] = useState<OrderPickupLocationDetails | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<OrderFormErrors>({});
 
   const effectiveClientId = isAdmin ? Number(selectedClientId) : sessionClientId;
 
@@ -125,6 +166,7 @@ export function AddClientOrderDialog({
     setServicesError(null);
     setCitiesError(null);
     setSubmitError(null);
+    setFieldErrors({});
   }, []);
 
   const loadClients = useCallback(async () => {
@@ -347,8 +389,14 @@ export function AddClientOrderDialog({
     key: K,
     value: (typeof initialForm)[K]
   ) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    const sanitizer = ORDER_FIELD_SANITIZERS[key];
+    const next = sanitizer && typeof value === "string" ? sanitizer(value) : value;
+    setForm((prev) => ({ ...prev, [key]: next }));
+    setFieldErrors((prev) => clearFieldError(prev, key));
   };
+
+  const inputClassFor = (key: keyof OrderFormErrors) =>
+    cn(inputClass, fieldErrors[key] && fieldErrorInputClass);
 
   const buildPayload = (): CreateOrderPayload | null => {
     if (!pickupDetails) return null;
@@ -374,9 +422,9 @@ export function AddClientOrderDialog({
       deliveryAddress: form.deliveryAddress.trim(),
       area: form.area.trim(),
       productName: form.productName.trim(),
-      amount: Number(form.amount) || 0,
-      weight: Number(form.weight) || 1,
-      quantity: Math.max(1, Math.trunc(Number(form.quantity) || 1)),
+      amount: Number(form.amount),
+      weight: Number(form.weight),
+      quantity: Number(form.quantity),
       customerRemarks: form.customerRemarks.trim(),
       isReplacement: form.isReplacement,
     };
@@ -391,18 +439,19 @@ export function AddClientOrderDialog({
       return;
     }
 
-    if (isAdmin && effectiveClientId < 1) {
-      setSubmitError("Please select a client.");
+    const errors: OrderFormErrors = validateFields(form, ORDER_FIELD_RULES);
+    if (isAdmin && effectiveClientId < 1) errors.clientId = "Please select a client.";
+    if (!selectedPickupLocationId) errors.pickupLocationId = "Please select a pickup location.";
+    if (!selectedServiceId) errors.serviceId = "Please select a service.";
+    setFieldErrors(errors);
+
+    if (hasErrors(errors)) {
+      setSubmitError(FIX_FIELDS_MESSAGE);
       return;
     }
 
     if (!pickupDetails) {
-      setSubmitError("Please select a pickup location.");
-      return;
-    }
-
-    if (!selectedServiceId) {
-      setSubmitError("Please select a service.");
+      setSubmitError("Pickup location details are still loading. Please try again.");
       return;
     }
 
@@ -505,7 +554,7 @@ export function AddClientOrderDialog({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 max-h-[85vh] overflow-y-auto">
+        <form onSubmit={handleSubmit} noValidate className="p-6 max-h-[85vh] overflow-y-auto">
           {loadError && (
             <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-medium">
               {loadError}
@@ -514,13 +563,16 @@ export function AddClientOrderDialog({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {isAdmin && (
-              <FormField label="Client" required>
+              <FormField label="Client" required error={fieldErrors.clientId}>
                 <div className="relative">
                   <select
                     value={selectedClientId}
-                    onChange={(e) => setSelectedClientId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedClientId(e.target.value);
+                      setFieldErrors((prev) => clearFieldError(prev, "clientId"));
+                    }}
                     disabled={loadingClients || submitting}
-                    className={cn(inputClass, "appearance-none cursor-pointer")}
+                    className={cn(inputClassFor("clientId"), "appearance-none cursor-pointer")}
                     required
                   >
                     <option value="">
@@ -539,18 +591,21 @@ export function AddClientOrderDialog({
                 </div>
               </FormField>
             )}
-            <FormField label="Pickup Location" required>
+            <FormField label="Pickup Location" required error={fieldErrors.pickupLocationId}>
               <div className="relative">
                 <select
                   value={selectedPickupLocationId}
-                  onChange={(e) => setSelectedPickupLocationId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedPickupLocationId(e.target.value);
+                    setFieldErrors((prev) => clearFieldError(prev, "pickupLocationId"));
+                  }}
                   disabled={
                     loadingLocations ||
                     submitting ||
                     !ready ||
                     (isAdmin && !effectiveClientId)
                   }
-                  className={cn(inputClass, "appearance-none cursor-pointer")}
+                  className={cn(inputClassFor("pickupLocationId"), "appearance-none cursor-pointer")}
                   required
                 >
                   <option value="">
@@ -573,13 +628,16 @@ export function AddClientOrderDialog({
                 />
               </div>
             </FormField>
-            <FormField label="Service" required>
+            <FormField label="Service" required error={fieldErrors.serviceId}>
               <div className="relative">
                 <select
                   value={selectedServiceId}
-                  onChange={(e) => setSelectedServiceId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedServiceId(e.target.value);
+                    setFieldErrors((prev) => clearFieldError(prev, "serviceId"));
+                  }}
                   disabled={loadingServices || submitting}
-                  className={cn(inputClass, "appearance-none cursor-pointer")}
+                  className={cn(inputClassFor("serviceId"), "appearance-none cursor-pointer")}
                   required
                 >
                   <option value="">
@@ -597,56 +655,61 @@ export function AddClientOrderDialog({
                 />
               </div>
             </FormField>
-            <FormField label="Customer Name" required>
+            <FormField label="Customer Name" required error={fieldErrors.customerName}>
               <input
                 type="text"
                 value={form.customerName}
                 onChange={(e) => updateField("customerName", e.target.value)}
+                maxLength={100}
                 placeholder="Customer Name"
-                className={inputClass}
+                className={inputClassFor("customerName")}
                 required
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Customer Phone" required>
+            <FormField label="Customer Phone" required error={fieldErrors.customerPhone}>
               <input
                 type="text"
                 value={form.customerPhone}
                 onChange={(e) => updateField("customerPhone", e.target.value)}
-                placeholder="Customer Phone"
-                className={inputClass}
+                maxLength={13}
+                inputMode="tel"
+                placeholder="03001234567"
+                className={inputClassFor("customerPhone")}
                 required
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Customer Reference">
+            <FormField label="Customer Reference" error={fieldErrors.customerReference}>
               <input
                 type="text"
                 value={form.customerReference}
                 onChange={(e) => updateField("customerReference", e.target.value)}
+                maxLength={50}
                 placeholder="Customer Reference"
-                className={inputClass}
+                className={inputClassFor("customerReference")}
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Delivery Address" required>
+            <FormField label="Delivery Address" required error={fieldErrors.deliveryAddress}>
               <input
                 type="text"
                 value={form.deliveryAddress}
                 onChange={(e) => updateField("deliveryAddress", e.target.value)}
+                maxLength={250}
                 placeholder="Delivery Address"
-                className={inputClass}
+                className={inputClassFor("deliveryAddress")}
                 required
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Destination City" required>
+            <FormField label="Destination City" required error={fieldErrors.destinationCityId}>
               <div className="relative">
                 <select
                   value={form.destinationCityId}
                   onChange={(e) => updateField("destinationCityId", e.target.value)}
                   disabled={loadingCities || submitting}
-                  className={cn(inputClass, "appearance-none cursor-pointer")}
+                  className={cn(inputClassFor("destinationCityId"), "appearance-none cursor-pointer")}
                   required
                 >
                   <option value="">
@@ -664,59 +727,58 @@ export function AddClientOrderDialog({
                 />
               </div>
             </FormField>
-            <FormField label="Area">
+            <FormField label="Area" error={fieldErrors.area}>
               <input
                 type="text"
                 value={form.area}
                 onChange={(e) => updateField("area", e.target.value)}
+                maxLength={100}
                 placeholder="Area"
-                className={inputClass}
+                className={inputClassFor("area")}
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Product Name">
+            <FormField label="Product Name" error={fieldErrors.productName}>
               <input
                 type="text"
                 value={form.productName}
                 onChange={(e) => updateField("productName", e.target.value)}
+                maxLength={150}
                 placeholder="Product Name"
-                className={inputClass}
+                className={inputClassFor("productName")}
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Amount">
+            <FormField label="COD Amount" required error={fieldErrors.amount}>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.amount}
                 onChange={(e) => updateField("amount", e.target.value)}
-                placeholder="Amount"
-                className={inputClass}
+                placeholder="e.g. 2500"
+                className={inputClassFor("amount")}
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Quantity">
+            <FormField label="Quantity" required error={fieldErrors.quantity}>
               <input
-                type="number"
-                min="1"
-                step="1"
+                type="text"
+                inputMode="numeric"
                 value={form.quantity}
                 onChange={(e) => updateField("quantity", e.target.value)}
                 placeholder="1"
-                className={inputClass}
+                className={inputClassFor("quantity")}
                 disabled={submitting}
               />
             </FormField>
-            <FormField label="Weight">
+            <FormField label="Weight (kg)" required error={fieldErrors.weight}>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={form.weight}
                 onChange={(e) => updateField("weight", e.target.value)}
                 placeholder="1"
-                className={inputClass}
+                className={inputClassFor("weight")}
                 disabled={submitting}
               />
             </FormField>
@@ -760,12 +822,13 @@ export function AddClientOrderDialog({
               </label>
             </FormField>
             <div className="md:col-span-2">
-              <FormField label="Customer Remarks">
+              <FormField label="Customer Remarks" error={fieldErrors.customerRemarks}>
                 <textarea
                   value={form.customerRemarks}
                   onChange={(e) => updateField("customerRemarks", e.target.value)}
                   placeholder="Customer Remarks"
                   rows={3}
+                  maxLength={500}
                   disabled={submitting}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all placeholder:text-slate-300 resize-none"
                 />

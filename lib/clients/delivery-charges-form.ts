@@ -50,8 +50,11 @@ export function normalizeDeliverySettings(raw: unknown): ClientDeliverySettings 
 export function validateDeliverySettings(settings: DeliverySettingsValues): string | null {
   if (settings.isFixedFuelSurcharge) {
     const value = Number(settings.fuelSurchargeValue);
-    if (!Number.isFinite(value) || value < 0) {
+    if (settings.fuelSurchargeValue.trim() === "" || !Number.isFinite(value) || value < 0) {
       return "Please enter a valid fuel surcharge percentage.";
+    }
+    if (value > 100) {
+      return "Fuel surcharge cannot be more than 100%.";
     }
   }
 

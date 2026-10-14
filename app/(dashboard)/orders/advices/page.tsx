@@ -396,6 +396,7 @@ export default function OrdersAdvicesPage() {
             <textarea
               value={remarkText}
               onChange={(e) => setRemarkText(e.target.value)}
+              maxLength={500}
               placeholder="Type a remark"
               rows={4}
               disabled={submittingRemark}

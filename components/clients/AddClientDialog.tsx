@@ -10,12 +10,20 @@ import {
 } from '@/components/ui/AppDialog';
 import {
   buildClientFormData,
+  CLIENT_FIELD_RULES,
   CREATE_CLIENT_ROLE_ID,
 } from '@/lib/clients/client-form';
 import {
   defaultCreateClientFormValues,
   type CreateClientFormValues,
 } from '@/lib/types/create-client';
+import {
+  FIX_FIELDS_MESSAGE,
+  clearFieldError,
+  hasErrors,
+  validateFields,
+  type FieldErrors,
+} from '@/lib/validation';
 
 interface AddClientDialogProps {
   isOpen: boolean;
@@ -30,21 +38,32 @@ export function AddClientDialog({ isOpen, onClose, onSuccess }: AddClientDialogP
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CreateClientFormValues>>({});
 
   useEffect(() => {
     if (!isOpen) return;
     setValues(defaultCreateClientFormValues);
     setLogoFile(null);
     setSubmitError(null);
+    setFieldErrors({});
     setSubmitting(false);
   }, [isOpen]);
 
   const setField = (field: keyof CreateClientFormValues, value: string) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => clearFieldError(prev, field));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const errors = validateFields(values, CLIENT_FIELD_RULES);
+    setFieldErrors(errors);
+    if (hasErrors(errors)) {
+      setSubmitError(FIX_FIELDS_MESSAGE);
+      return;
+    }
+
     setSubmitting(true);
     setSubmitError(null);
 
@@ -92,7 +111,7 @@ export function AddClientDialog({ isOpen, onClose, onSuccess }: AddClientDialogP
         />
       }
     >
-      <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 flex-1">
         <DialogBody>
           {submitError && <DialogError message={submitError} />}
           <ClientFormFields
@@ -100,6 +119,7 @@ export function AddClientDialog({ isOpen, onClose, onSuccess }: AddClientDialogP
             onChange={setField}
             logoFile={logoFile}
             onLogoChange={setLogoFile}
+            errors={fieldErrors}
             hideRoleAndServices
           />
         </DialogBody>

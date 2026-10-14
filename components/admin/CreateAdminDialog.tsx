@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { AdminFormFields, type AdminFormValues } from "@/components/admin/AdminFormFields";
+import {
+  ADMIN_FIELD_RULES,
+  AdminFormFields,
+  type AdminFormValues,
+} from "@/components/admin/AdminFormFields";
+import { FIX_FIELDS_MESSAGE, clearFieldError, hasErrors, validateFields, type FieldErrors } from "@/lib/validation";
 import {
   AppDialog,
   DialogBody,
@@ -38,6 +43,7 @@ export default function CreateAdminDialog({
   const [adminImage, setAdminImage] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<AdminFormValues>>({});
   const [roles, setRoles] = useState<Role[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -49,6 +55,7 @@ export default function CreateAdminDialog({
     setValues(emptyForm);
     setAdminImage(null);
     setError(null);
+    setFieldErrors({});
     setSubmitting(false);
     setSelectedWarehouseIds([]);
   }, [isOpen]);
@@ -92,10 +99,19 @@ export default function CreateAdminDialog({
 
   const setField = (field: keyof AdminFormValues, value: string) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => clearFieldError(prev, field));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const errors = validateFields(values, ADMIN_FIELD_RULES);
+    setFieldErrors(errors);
+    if (hasErrors(errors)) {
+      setError(FIX_FIELDS_MESSAGE);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -152,7 +168,7 @@ export default function CreateAdminDialog({
         />
       }
     >
-      <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 flex-1">
         <DialogBody>
           {error && <DialogError message={error} />}
           <AdminFormFields
@@ -161,6 +177,7 @@ export default function CreateAdminDialog({
             adminImage={adminImage}
             onImageChange={setAdminImage}
             showRole
+            errors={fieldErrors}
             roles={roles}
             loadingRoles={loadingRoles}
             showWarehouses

@@ -9,6 +9,18 @@ import {
   DialogLoading,
 } from "@/components/ui/AppDialog";
 import type { City } from "@/lib/types/city";
+import { cn } from "@/lib/utils";
+import { FieldError, fieldErrorInputClass } from "@/components/ui/FieldError";
+import {
+  FIX_FIELDS_MESSAGE,
+  clearFieldError,
+  hasErrors,
+  rules,
+  sanitize,
+  validateFields,
+  type FieldErrors,
+  type FieldRules,
+} from "@/lib/validation";
 import type { CreatePickupLocationPayload, PickupLocation } from "@/lib/types/pickup-location";
 
 const FORM_ID = "edit-pickup-location-form";
@@ -45,6 +57,18 @@ function locationToFormValues(location: PickupLocation) {
   };
 }
 
+type PickupFormValues = ReturnType<typeof locationToFormValues>;
+
+const PICKUP_FIELD_RULES: FieldRules<PickupFormValues> = {
+  brandName: rules.text("Brand name", { required: true, max: 100 }),
+  contactPerson: rules.name("Contact person", { required: true }),
+  contactPhone: rules.phone("Contact phone", { required: true }),
+  locationName: rules.text("Location name", { required: true, max: 100 }),
+  cityId: rules.selected("Pickup city"),
+  area: rules.text("Area", { required: true, max: 100 }),
+  address: rules.address("Address", { required: true }),
+};
+
 interface EditPickupLocationDialogProps {
   clientId: number;
   location: PickupLocation | null;
@@ -66,12 +90,14 @@ export function EditPickupLocationDialog({
   const [loadingCities, setLoadingCities] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<PickupFormValues>>({});
 
   useEffect(() => {
     if (!isOpen || !location) return;
 
     setValues(locationToFormValues(location));
     setError(null);
+    setFieldErrors({});
     setSubmitting(false);
     setLoadingCities(true);
 
@@ -96,6 +122,7 @@ export function EditPickupLocationDialog({
     value: string | number | boolean
   ) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => clearFieldError(prev, field));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -103,8 +130,10 @@ export function EditPickupLocationDialog({
     if (!location) return;
 
     const form = formRef.current ?? e.currentTarget;
-    if (!form.checkValidity()) {
-      form.reportValidity();
+    const errors = validateFields(values, PICKUP_FIELD_RULES);
+    setFieldErrors(errors);
+    if (hasErrors(errors)) {
+      setError(FIX_FIELDS_MESSAGE);
       return;
     }
 
@@ -198,6 +227,7 @@ export function EditPickupLocationDialog({
         <form
           ref={formRef}
           id={FORM_ID}
+          noValidate
           onSubmit={handleSubmit}
           className="flex flex-col min-h-0 flex-1"
           autoComplete="off"
@@ -205,74 +235,102 @@ export function EditPickupLocationDialog({
           <DialogBody>
             {error && <DialogError message={error} />}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <input
-                type="text"
-                name="brandName"
-                value={values.brandName}
-                onChange={(e) => setField("brandName", e.target.value)}
-                placeholder="Brand Name"
-                className={inputClass}
-                required
-              />
-              <input
-                type="text"
-                name="contactPerson"
-                value={values.contactPerson}
-                onChange={(e) => setField("contactPerson", e.target.value)}
-                placeholder="Contact Person"
-                className={inputClass}
-                required
-              />
-              <input
-                type="tel"
-                name="contactPhone"
-                value={values.contactPhone}
-                onChange={(e) => setField("contactPhone", e.target.value)}
-                placeholder="Contact Phone"
-                className={inputClass}
-                required
-              />
-              <input
-                type="text"
-                name="locationName"
-                value={values.locationName}
-                onChange={(e) => setField("locationName", e.target.value)}
-                placeholder="Location Name"
-                className={inputClass}
-                required
-              />
-              <select
-                name="cityId"
-                value={values.cityId || ""}
-                onChange={(e) => setField("cityId", Number(e.target.value))}
-                className={`${inputClass} ${!values.cityId ? "text-slate-400" : ""}`}
-                required
-              >
-                <option value="">--Select Pickup City--</option>
-                {cities.map((city) => (
-                  <option key={city.cityId} value={city.cityId} className="text-slate-700">
-                    {city.cityName}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                name="area"
-                value={values.area}
-                onChange={(e) => setField("area", e.target.value)}
-                placeholder="Area"
-                className={inputClass}
-                required
-              />
-              <input
-                type="text"
-                name="address"
-                value={values.address}
-                onChange={(e) => setField("address", e.target.value)}
-                placeholder="Address"
-                className={inputClass}
-                required
-              />
+              <div>
+                <input
+                  maxLength={100}
+                  type="text"
+                  name="brandName"
+                  value={values.brandName}
+                  onChange={(e) => setField("brandName", e.target.value)}
+                  placeholder="Brand Name"
+                  className={cn(inputClass, fieldErrors.brandName && fieldErrorInputClass)}
+                  required
+                />
+                <FieldError message={fieldErrors.brandName} />
+              </div>
+              <div>
+                <input
+                  maxLength={100}
+                  type="text"
+                  name="contactPerson"
+                  value={values.contactPerson}
+                  onChange={(e) => setField("contactPerson", sanitize.name(e.target.value))}
+                  placeholder="Contact Person"
+                  className={cn(inputClass, fieldErrors.contactPerson && fieldErrorInputClass)}
+                  required
+                />
+                <FieldError message={fieldErrors.contactPerson} />
+              </div>
+              <div>
+                <input
+                  inputMode="tel"
+                  maxLength={13}
+                  type="tel"
+                  name="contactPhone"
+                  value={values.contactPhone}
+                  onChange={(e) => setField("contactPhone", sanitize.phone(e.target.value))}
+                  placeholder="Contact Phone (03001234567)"
+                  className={cn(inputClass, fieldErrors.contactPhone && fieldErrorInputClass)}
+                  required
+                />
+                <FieldError message={fieldErrors.contactPhone} />
+              </div>
+              <div>
+                <input
+                  maxLength={100}
+                  type="text"
+                  name="locationName"
+                  value={values.locationName}
+                  onChange={(e) => setField("locationName", e.target.value)}
+                  placeholder="Location Name"
+                  className={cn(inputClass, fieldErrors.locationName && fieldErrorInputClass)}
+                  required
+                />
+                <FieldError message={fieldErrors.locationName} />
+              </div>
+              <div>
+                <select
+                  name="cityId"
+                  value={values.cityId || ""}
+                  onChange={(e) => setField("cityId", Number(e.target.value))}
+                  className={cn(`${inputClass} ${!values.cityId ? "text-slate-400" : ""}`, fieldErrors.cityId && fieldErrorInputClass)}
+                  required
+                >
+                  <option value="">--Select Pickup City--</option>
+                  {cities.map((city) => (
+                    <option key={city.cityId} value={city.cityId} className="text-slate-700">
+                      {city.cityName}
+                    </option>
+                  ))}
+                </select>
+                <FieldError message={fieldErrors.cityId} />
+              </div>
+              <div>
+                <input
+                  maxLength={100}
+                  type="text"
+                  name="area"
+                  value={values.area}
+                  onChange={(e) => setField("area", e.target.value)}
+                  placeholder="Area"
+                  className={cn(inputClass, fieldErrors.area && fieldErrorInputClass)}
+                  required
+                />
+                <FieldError message={fieldErrors.area} />
+              </div>
+              <div>
+                <input
+                  maxLength={250}
+                  type="text"
+                  name="address"
+                  value={values.address}
+                  onChange={(e) => setField("address", e.target.value)}
+                  placeholder="Address"
+                  className={cn(inputClass, fieldErrors.address && fieldErrorInputClass)}
+                  required
+                />
+                <FieldError message={fieldErrors.address} />
+              </div>
             </div>
             <label className="mt-4 flex items-center gap-2 cursor-pointer">
               <input

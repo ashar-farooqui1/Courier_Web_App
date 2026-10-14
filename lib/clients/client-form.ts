@@ -1,8 +1,31 @@
 import { getStoredAdminId } from '@/lib/auth/role';
 import type { Client, UpdateClientPayload } from '@/lib/types/client';
 import type { CreateClientFormValues } from '@/lib/types/create-client';
+import { rules, sanitize, type FieldRules } from '@/lib/validation';
 
 export const CREATE_CLIENT_ROLE_ID = 3;
+
+/** Typing filters for the Add / Edit client form. */
+export const CLIENT_FIELD_SANITIZERS: Partial<
+  Record<keyof CreateClientFormValues, (value: string) => string>
+> = {
+  pocNumber: sanitize.phone,
+  contactNumber: sanitize.phone,
+  city: sanitize.name,
+  roleId: (value) => sanitize.digits(value, 3),
+};
+
+export const CLIENT_FIELD_RULES: FieldRules<CreateClientFormValues> = {
+  brandName: rules.text('Brand name', { max: 100 }),
+  clientName: rules.text('Client name', { required: true, max: 100 }),
+  pocNumber: rules.phone('POC number'),
+  contactNumber: rules.phone('Contact number'),
+  clientEmail: rules.email('Client email'),
+  clientBillingAddress: rules.address('Billing address'),
+  clientPickupAddress: rules.address('Pickup address'),
+  baseTown: rules.text('Base town', { max: 100 }),
+  city: rules.name('City'),
+};
 
 function formatClientStatus(status: string): string {
   const normalized = status.trim().toLowerCase();

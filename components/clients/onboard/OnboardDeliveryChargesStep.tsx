@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { dialogInputClass, dialogLabelClass } from "@/components/ui/dialog-styles";
 import { ChargeSlabEditor } from "@/components/clients/onboard/ChargeSlabEditor";
+import { sanitize } from "@/lib/validation";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { AdminSettings } from "@/lib/types/admin-settings";
 import type {
@@ -144,11 +145,12 @@ export function OnboardDeliveryChargesStep({
             <label className={dialogLabelClass}>Fuel Surcharge</label>
             <div className="flex items-center gap-2">
               <input
-                type="number"
-                min={0}
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={settings.fuelSurchargeValue}
-                onChange={(e) => updateSetting("fuelSurchargeValue", e.target.value)}
+                onChange={(e) =>
+                  updateSetting("fuelSurchargeValue", sanitize.decimal(e.target.value, 2))
+                }
                 className="w-24 h-10 px-3 border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
               />
               <span className="text-xs font-bold text-slate-500">%</span>

@@ -12,7 +12,9 @@ import {
   pricingToServiceCharges,
   settingsToFormValues,
   unwrapDeliverySettingsResponse,
+  validateDeliverySettings,
 } from "@/lib/clients/delivery-charges-form";
+import { validateServiceCharges } from "@/lib/clients/onboard-validation";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { ClientPricingEntry } from "@/lib/types/client-delivery";
 import type { Client } from "@/lib/types/client";
@@ -138,6 +140,13 @@ export default function ClientDeliveryChargesPage() {
     const chargePayloads = buildChargePayloads(clientId, serviceCharges);
     if (chargePayloads.length === 0) {
       setError("Please enable at least one service with at least one zone.");
+      return;
+    }
+
+    const validationError =
+      validateDeliverySettings(deliverySettings) ?? validateServiceCharges(serviceCharges);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 

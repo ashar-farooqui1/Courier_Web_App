@@ -9,6 +9,9 @@ import { buildAppAuthHeaders } from '@/lib/api/app-request-context';
 import { getDefaultWarehouse } from '@/lib/auth/warehouse';
 import type { Rider } from '@/lib/types/rider';
 import type { ReweightArrivalResult, ReweightScannedOrder } from '@/lib/types/order';
+import { rules, sanitize } from '@/lib/validation';
+
+const validateNewWeight = rules.weight('New weight', { required: true, max: 100 });
 
 function formatDateTime(value: string): string {
   if (!value) return '—';
@@ -143,9 +146,9 @@ export default function ReWeightArrivalsPage() {
     }
 
     if (useNewWeight) {
-      const parsed = Number(newWeightValue);
-      if (!Number.isFinite(parsed) || parsed <= 0) {
-        setError('Enter a valid new weight.');
+      const weightError = validateNewWeight(newWeightValue);
+      if (weightError) {
+        setError(weightError);
         return;
       }
     }
@@ -205,7 +208,7 @@ export default function ReWeightArrivalsPage() {
             <input
               type="text"
               value={awbInput}
-              onChange={(e) => setAwbInput(e.target.value)}
+              onChange={(e) => setAwbInput(sanitize.awbList(e.target.value))}
               onKeyDown={handleAwbKeyDown}
               placeholder="Scan or type AWB, press Enter"
               className="w-full h-10 px-4 bg-white border border-slate-200 rounded-md text-xs font-bold text-black focus:outline-none"
@@ -239,11 +242,10 @@ export default function ReWeightArrivalsPage() {
                 />
               </div>
               <input
-                type="number"
-                min="0"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={newWeightValue}
-                onChange={(e) => setNewWeightValue(e.target.value)}
+                onChange={(e) => setNewWeightValue(sanitize.decimal(e.target.value, 2))}
                 disabled={!useNewWeight}
                 placeholder="New weight"
                 className="flex-1 h-10 px-4 bg-white border border-slate-200 rounded-r-md text-xs font-bold text-black focus:outline-none disabled:bg-slate-50 disabled:text-slate-300"

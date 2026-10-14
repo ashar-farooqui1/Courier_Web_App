@@ -12,6 +12,7 @@ import { buildAppAuthHeaders } from '@/lib/api/app-request-context';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { formatOrderDate, formatAmount } from '@/components/orders/order-columns';
 import type { DeliverySheetDebriefingData, DeliverySheetDebriefingOrder } from '@/lib/types/debriefing';
+import { sanitize } from '@/lib/validation';
 
 const REASON_OPTIONS = [
   'ADC|ADDRESS CHANGED',
@@ -511,7 +512,8 @@ function RollcartDebriefingContent() {
             <input
               type="text"
               value={rollcartId}
-              onChange={(e) => setRollcartId(e.target.value)}
+              onChange={(e) => setRollcartId(sanitize.digits(e.target.value, 10))}
+              inputMode="numeric"
               onKeyDown={(e) => e.key === 'Enter' && loadDebriefing()}
               placeholder="Delivery Sheet Id key"
               className="w-full h-10 px-4 bg-slate-50 border border-slate-200 rounded text-sm font-bold text-primary focus:outline-none"
@@ -646,6 +648,7 @@ function RollcartDebriefingContent() {
                     type="text"
                     value={customReason}
                     onChange={(e) => setCustomReason(e.target.value)}
+                    maxLength={250}
                     placeholder="Type the reason"
                     className={dialogInputClass}
                   />

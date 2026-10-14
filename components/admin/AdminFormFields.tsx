@@ -10,6 +10,8 @@ import {
 } from "@/components/ui/dialog-styles";
 import type { Role } from "@/types/role";
 import type { Warehouse } from "@/lib/types/warehouse";
+import { FieldError, fieldErrorInputClass } from "@/components/ui/FieldError";
+import { rules, sanitize, type FieldErrors, type FieldRules } from "@/lib/validation";
 
 export interface AdminFormValues {
   adminName: string;
@@ -19,6 +21,22 @@ export interface AdminFormValues {
   designation: string;
   roleId: string;
 }
+
+const ADMIN_FIELD_SANITIZERS: Partial<Record<keyof AdminFormValues, (value: string) => string>> = {
+  adminName: sanitize.name,
+  cnic: sanitize.cnic,
+  contactNumber: sanitize.phone,
+  designation: sanitize.name,
+};
+
+export const ADMIN_FIELD_RULES: FieldRules<AdminFormValues> = {
+  adminName: rules.name("Admin name", { required: true }),
+  cnic: rules.cnic("CNIC", { required: true }),
+  contactNumber: rules.mobile("Contact number", { required: true }),
+  adminEmail: rules.email("Admin email", { required: true }),
+  designation: rules.name("Designation"),
+  roleId: rules.selected("Role"),
+};
 
 interface AdminFormFieldsProps {
   values: AdminFormValues;
@@ -35,6 +53,7 @@ interface AdminFormFieldsProps {
   loadingWarehouses?: boolean;
   selectedWarehouseIds?: number[];
   onWarehouseIdsChange?: (ids: number[]) => void;
+  errors?: FieldErrors<AdminFormValues>;
 }
 
 function WarehouseMultiSelect({
@@ -131,7 +150,13 @@ export function AdminFormFields({
   loadingWarehouses = false,
   selectedWarehouseIds = [],
   onWarehouseIdsChange,
+  errors = {},
 }: AdminFormFieldsProps) {
+  const change = (field: keyof AdminFormValues, value: string) => {
+    const sanitizer = ADMIN_FIELD_SANITIZERS[field];
+    onChange(field, sanitizer ? sanitizer(value) : value);
+  };
+
   return (
     <div className="space-y-4">
       <div className="space-y-1">
@@ -139,12 +164,14 @@ export function AdminFormFields({
           Admin Name <span className="text-red-500">*</span>
         </label>
         <input
+          maxLength={100}
           type="text"
           value={values.adminName}
-          onChange={(e) => onChange("adminName", e.target.value)}
-          className={dialogInputClass}
+          onChange={(e) => change("adminName", e.target.value)}
+          className={cn(dialogInputClass, errors.adminName && fieldErrorInputClass)}
           required
         />
+        <FieldError message={errors.adminName} />
       </div>
 
       <div className="space-y-1">
@@ -152,12 +179,15 @@ export function AdminFormFields({
           CNIC <span className="text-red-500">*</span>
         </label>
         <input
+          inputMode="numeric"
+          placeholder="42201-1234567-1"
           type="text"
           value={values.cnic}
-          onChange={(e) => onChange("cnic", e.target.value)}
-          className={dialogInputClass}
+          onChange={(e) => change("cnic", e.target.value)}
+          className={cn(dialogInputClass, errors.cnic && fieldErrorInputClass)}
           required
         />
+        <FieldError message={errors.cnic} />
       </div>
 
       <div className="space-y-1">
@@ -165,12 +195,16 @@ export function AdminFormFields({
           Contact Number <span className="text-red-500">*</span>
         </label>
         <input
+          inputMode="tel"
+          maxLength={13}
+          placeholder="03001234567"
           type="text"
           value={values.contactNumber}
-          onChange={(e) => onChange("contactNumber", e.target.value)}
-          className={dialogInputClass}
+          onChange={(e) => change("contactNumber", e.target.value)}
+          className={cn(dialogInputClass, errors.contactNumber && fieldErrorInputClass)}
           required
         />
+        <FieldError message={errors.contactNumber} />
       </div>
 
       <div className="space-y-1">
@@ -178,22 +212,27 @@ export function AdminFormFields({
           Admin Email <span className="text-red-500">*</span>
         </label>
         <input
+          maxLength={100}
+          placeholder="name@example.com"
           type="email"
           value={values.adminEmail}
-          onChange={(e) => onChange("adminEmail", e.target.value)}
-          className={dialogInputClass}
+          onChange={(e) => change("adminEmail", e.target.value)}
+          className={cn(dialogInputClass, errors.adminEmail && fieldErrorInputClass)}
           required
         />
+        <FieldError message={errors.adminEmail} />
       </div>
 
       <div className="space-y-1">
         <label className={dialogLabelClass}>Designation</label>
         <input
+          maxLength={100}
           type="text"
           value={values.designation}
-          onChange={(e) => onChange("designation", e.target.value)}
-          className={dialogInputClass}
+          onChange={(e) => change("designation", e.target.value)}
+          className={cn(dialogInputClass, errors.designation && fieldErrorInputClass)}
         />
+        <FieldError message={errors.designation} />
       </div>
 
       {showRole && (
@@ -203,8 +242,8 @@ export function AdminFormFields({
           </label>
           <select
             value={values.roleId}
-            onChange={(e) => onChange("roleId", e.target.value)}
-            className={cn(dialogInputClass, "cursor-pointer appearance-none")}
+            onChange={(e) => change("roleId", e.target.value)}
+            className={cn(dialogInputClass, "cursor-pointer appearance-none", errors.roleId && fieldErrorInputClass)}
             required
             disabled={loadingRoles}
           >
@@ -215,6 +254,7 @@ export function AdminFormFields({
               </option>
             ))}
           </select>
+          <FieldError message={errors.roleId} />
         </div>
       )}
 

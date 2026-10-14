@@ -10,7 +10,8 @@ import {
   DialogLoading,
 } from "@/components/ui/AppDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
-import { buildRiderFormData } from "@/lib/riders/rider-form";
+import { buildRiderFormData, validateRiderForm, type RiderFormErrors } from "@/lib/riders/rider-form";
+import { FIX_FIELDS_MESSAGE, hasErrors } from "@/lib/validation";
 import {
   defaultCreateRiderFormValues,
   type CreateRiderFormValues,
@@ -37,6 +38,7 @@ export function CreateRiderDialog({
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<RiderFormErrors>({});
 
   useEffect(() => {
     if (!isOpen) return;
@@ -45,6 +47,7 @@ export function CreateRiderDialog({
     setImageFile(null);
     setLicenseFile(null);
     setError(null);
+    setFieldErrors({});
     setSubmitting(false);
     setLoadingCities(true);
 
@@ -66,10 +69,19 @@ export function CreateRiderDialog({
 
   const setField = (field: keyof CreateRiderFormValues, value: string) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const errors = validateRiderForm(values, imageFile, licenseFile);
+    setFieldErrors(errors);
+    if (hasErrors(errors)) {
+      setError(FIX_FIELDS_MESSAGE);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -116,7 +128,7 @@ export function CreateRiderDialog({
         />
       }
     >
-      <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+      <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 flex-1">
         <DialogBody>
           {error && <DialogError message={error} />}
           {loadingCities ? (
@@ -129,6 +141,7 @@ export function CreateRiderDialog({
               onImageChange={setImageFile}
               licenseFile={licenseFile}
               onLicenseChange={setLicenseFile}
+              errors={fieldErrors}
               cities={cities}
             />
           )}

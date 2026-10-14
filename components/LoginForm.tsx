@@ -9,6 +9,9 @@ import OtpVerificationForm from "@/components/OtpVerificationForm";
 import { useRouter } from "next/navigation";
 import { EmailNotVerifiedError, isEmailNotVerifiedError, login } from "@/lib/api/auth";
 import { isRememberMeEnabled, saveAuthSession } from "@/lib/auth/role";
+import { rules } from "@/lib/validation";
+
+const validateEmail = rules.email("Email", { required: true });
 
 const LoginForm = () => {
   const router = useRouter();
@@ -39,6 +42,17 @@ const LoginForm = () => {
     e.preventDefault();
     setLoginError("");
     setSuccessMessage("");
+
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setLoginError(emailError);
+      return;
+    }
+    if (!password) {
+      setLoginError("Password is required.");
+      return;
+    }
+
     setLoading(true);
 
     try {

@@ -10,7 +10,8 @@ import {
   DialogLoading,
 } from "@/components/ui/AppDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
-import { buildRiderFormData, riderToFormValues } from "@/lib/riders/rider-form";
+import { buildRiderFormData, validateRiderForm, type RiderFormErrors, riderToFormValues } from "@/lib/riders/rider-form";
+import { FIX_FIELDS_MESSAGE, hasErrors } from "@/lib/validation";
 import { displayFileRef, isBrowserImageUrl } from "@/lib/riders/rider-display";
 import type { CreateRiderFormValues } from "@/lib/types/create-rider";
 import type { Rider } from "@/lib/types/rider";
@@ -38,6 +39,7 @@ export function EditRiderDialog({
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<RiderFormErrors>({});
 
   useEffect(() => {
     if (!isOpen || riderId === null) return;
@@ -51,6 +53,7 @@ export function EditRiderDialog({
       setImageFile(null);
       setLicenseFile(null);
       setValues(null);
+      setFieldErrors({});
       setExistingRider(null);
 
       try {
@@ -84,11 +87,19 @@ export function EditRiderDialog({
 
   const setField = (field: keyof CreateRiderFormValues, value: string) => {
     setValues((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!values || riderId === null) return;
+
+    const errors = validateRiderForm(values, imageFile, licenseFile);
+    setFieldErrors(errors);
+    if (hasErrors(errors)) {
+      setSubmitError(FIX_FIELDS_MESSAGE);
+      return;
+    }
 
     setSubmitting(true);
     setSubmitError(null);
@@ -158,7 +169,7 @@ export function EditRiderDialog({
           <DialogError message={loadError} />
         </DialogBody>
       ) : values ? (
-        <form id={FORM_ID} onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+        <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="flex flex-col min-h-0 flex-1">
           <DialogBody>
             {submitError && <DialogError message={submitError} />}
             <RiderFormFields
@@ -168,6 +179,7 @@ export function EditRiderDialog({
               onImageChange={setImageFile}
               licenseFile={licenseFile}
               onLicenseChange={setLicenseFile}
+              errors={fieldErrors}
               existingImageUrl={existingImageUrl}
               existingLicenseRef={displayFileRef(existingRider?.license)}
             />

@@ -308,6 +308,7 @@ export function OrderDetailView({ orderId, backHref, token, role, userId, roleId
                   type="text"
                   value={remarkText}
                   onChange={(e) => setRemarkText(e.target.value)}
+                  maxLength={500}
                   placeholder="Type a remarks"
                   disabled={submittingRemark}
                   className="flex-1 h-9 px-3 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary/20 disabled:opacity-50"

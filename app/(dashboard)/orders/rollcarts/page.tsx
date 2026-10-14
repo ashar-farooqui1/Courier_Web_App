@@ -8,6 +8,7 @@ import { buildAppAuthHeaders } from '@/lib/api/app-request-context';
 import { getDefaultWarehouse } from '@/lib/auth/warehouse';
 import { parseContentDispositionFilename } from '@/lib/format';
 import type { Rider } from '@/lib/types/rider';
+import { sanitize } from '@/lib/validation';
 
 interface RollcartLogRow {
   awbNo: string;
@@ -364,7 +365,7 @@ export default function CreateRollcartsPage() {
             <input
               type="text"
               value={awbInput}
-              onChange={(e) => setAwbInput(e.target.value)}
+              onChange={(e) => setAwbInput(sanitize.awbList(e.target.value))}
               onKeyDown={handleAwbKeyDown}
               placeholder="Scan or type AWB, press Enter"
               className="w-full h-10 px-4 bg-white border border-slate-200 rounded-md text-xs font-bold text-black focus:outline-none"

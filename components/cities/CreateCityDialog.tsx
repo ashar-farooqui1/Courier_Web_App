@@ -9,7 +9,14 @@ import {
   DialogLoading,
 } from "@/components/ui/AppDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
-import { CityFormFields } from "@/components/cities/CityFormFields";
+import { CITY_FIELD_RULES, CityFormFields } from "@/components/cities/CityFormFields";
+import {
+  FIX_FIELDS_MESSAGE,
+  clearFieldError,
+  hasErrors,
+  validateFields,
+  type FieldErrors,
+} from "@/lib/validation";
 import type { CreateCityPayload } from "@/lib/types/city";
 import type { Zone } from "@/lib/types/zone";
 
@@ -35,12 +42,14 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
   const [loadingZones, setLoadingZones] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors<CreateCityPayload>>({});
 
   useEffect(() => {
     if (!isOpen) return;
 
     setValues(emptyForm);
     setError(null);
+    setFieldErrors({});
     setSubmitting(false);
     setLoadingZones(true);
 
@@ -62,10 +71,18 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
 
   const setField = <K extends keyof CreateCityPayload>(field: K, value: CreateCityPayload[K]) => {
     setValues((prev) => ({ ...prev, [field]: value }));
+    setFieldErrors((prev) => clearFieldError(prev, field));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const fieldErrors = validateFields(values, CITY_FIELD_RULES);
+    setFieldErrors(fieldErrors);
+    if (hasErrors(fieldErrors)) {
+      setError(FIX_FIELDS_MESSAGE);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -134,8 +151,8 @@ export function CreateCityDialog({ isOpen, onClose, onSuccess }: CreateCityDialo
         {loadingZones ? (
           <DialogLoading message="Loading zones…" />
         ) : (
-          <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-4">
-            <CityFormFields values={values} zones={zones} onChange={setField} />
+          <form id={FORM_ID} onSubmit={handleSubmit} noValidate className="space-y-4">
+            <CityFormFields values={values} zones={zones} onChange={setField} errors={fieldErrors} />
           </form>
         )}
       </DialogBody>

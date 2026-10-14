@@ -1,3 +1,5 @@
+import { rules, sanitize, type FieldRules } from "@/lib/validation";
+
 export interface AdminSettings {
   settingId: number;
   ntn: string;
@@ -98,3 +100,38 @@ export function formValuesToUpdatePayload(values: AdminSettingsValues): UpdateAd
     sindhGSTPercentage: Number(values.sindhGSTPercentage) || 0,
   };
 }
+
+const decimal = (value: string) => sanitize.decimal(value, 2);
+
+export const ADMIN_SETTINGS_SANITIZERS: Partial<
+  Record<keyof AdminSettingsValues, (value: string) => string>
+> = {
+  ntn: sanitize.taxNumber,
+  gstNumber: sanitize.taxNumber,
+  strn: sanitize.taxNumber,
+  fuelFactor: decimal,
+  petrolCurrentPrice: decimal,
+  petrolBasePrice: decimal,
+  capitalGSTPercentage: decimal,
+  ajkgstPercentage: decimal,
+  kpkgstPercentage: decimal,
+  balochistanGSTPercentage: decimal,
+  punjabGSTPercentage: decimal,
+  sindhGSTPercentage: decimal,
+};
+
+export const ADMIN_SETTINGS_RULES: FieldRules<AdminSettingsValues> = {
+  ntn: rules.ntn("NTN"),
+  texInvNo: rules.text("Tax invoice no", { min: 1, max: 50 }),
+  gstNumber: rules.ntn("GST #"),
+  strn: rules.ntn("STRN"),
+  fuelFactor: rules.number("Fuel factor", { required: true, max: 100 }),
+  petrolCurrentPrice: rules.amount("Petrol current price", { required: true }),
+  petrolBasePrice: rules.amount("Petrol base price", { required: true }),
+  capitalGSTPercentage: rules.percentage("Capital GST %", { required: true }),
+  ajkgstPercentage: rules.percentage("AJK GST %", { required: true }),
+  kpkgstPercentage: rules.percentage("KPK GST %", { required: true }),
+  balochistanGSTPercentage: rules.percentage("Balochistan GST %", { required: true }),
+  punjabGSTPercentage: rules.percentage("Punjab GST %", { required: true }),
+  sindhGSTPercentage: rules.percentage("Sindh GST %", { required: true }),
+};

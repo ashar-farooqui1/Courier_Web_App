@@ -1,6 +1,13 @@
 "use client";
 
 import React from "react";
+import { cn } from "@/lib/utils";
+import { FieldError, fieldErrorInputClass } from "@/components/ui/FieldError";
+import {
+  BANK_DETAILS_SANITIZERS,
+  ONBOARD_INFO_SANITIZERS,
+} from "@/lib/clients/onboard-validation";
+import type { FieldErrors } from "@/lib/validation";
 import {
   dialogInputClass,
   dialogLabelClass,
@@ -15,7 +22,11 @@ interface OnboardClientInfoStepProps {
   onBankDetailsChange: (field: keyof BankDetailsValues, value: string) => void;
   cities: City[];
   admins: Admin[];
+  errors?: FieldErrors<OnboardClientInfoValues>;
+  bankErrors?: FieldErrors<BankDetailsValues>;
 }
+
+const Required = () => <span className="text-red-500"> *</span>;
 
 export function OnboardClientInfoStep({
   values,
@@ -24,7 +35,19 @@ export function OnboardClientInfoStep({
   onBankDetailsChange,
   cities,
   admins,
+  errors = {},
+  bankErrors = {},
 }: OnboardClientInfoStepProps) {
+  const change = (field: keyof OnboardClientInfoValues, value: string) => {
+    const sanitizer = ONBOARD_INFO_SANITIZERS[field];
+    onChange(field, sanitizer ? sanitizer(value) : value);
+  };
+
+  const changeBank = (field: keyof BankDetailsValues, value: string) => {
+    const sanitizer = BANK_DETAILS_SANITIZERS[field];
+    onBankDetailsChange(field, sanitizer ? sanitizer(value) : value);
+  };
+
   return (
     <div className="space-y-8">
       <div className="space-y-4">
@@ -32,113 +55,133 @@ export function OnboardClientInfoStep({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Client Name</label>
+            <label className={dialogLabelClass}>Client Name<Required /></label>
             <input
+              maxLength={100}
               type="text"
               value={values.clientName}
-              onChange={(e) => onChange("clientName", e.target.value)}
+              onChange={(e) => change("clientName", e.target.value)}
               placeholder="Client Name"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.clientName && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.clientName} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Brand Name</label>
             <input
+              maxLength={100}
               type="text"
               value={values.brandName}
-              onChange={(e) => onChange("brandName", e.target.value)}
+              onChange={(e) => change("brandName", e.target.value)}
               placeholder="Brand Name"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.brandName && fieldErrorInputClass)}
             />
+            <FieldError message={errors.brandName} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>POC #</label>
             <input
+              inputMode="tel"
+              maxLength={13}
               type="text"
               value={values.pocNumber}
-              onChange={(e) => onChange("pocNumber", e.target.value)}
+              onChange={(e) => change("pocNumber", e.target.value)}
               placeholder="POC #"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.pocNumber && fieldErrorInputClass)}
             />
+            <FieldError message={errors.pocNumber} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Contact #</label>
+            <label className={dialogLabelClass}>Contact #<Required /></label>
             <input
+              inputMode="tel"
+              maxLength={13}
               type="text"
               value={values.contactNumber}
-              onChange={(e) => onChange("contactNumber", e.target.value)}
-              placeholder="Contact #"
-              className={dialogInputClass}
+              onChange={(e) => change("contactNumber", e.target.value)}
+              placeholder="03001234567"
+              className={cn(dialogInputClass, errors.contactNumber && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.contactNumber} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Client Email</label>
+            <label className={dialogLabelClass}>Client Email<Required /></label>
             <input
+              maxLength={100}
               type="email"
               value={values.clientEmail}
-              onChange={(e) => onChange("clientEmail", e.target.value)}
+              onChange={(e) => change("clientEmail", e.target.value)}
               placeholder="Client Email"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.clientEmail && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.clientEmail} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>CNIC Number</label>
             <input
+              inputMode="numeric"
               type="text"
               value={values.cnicNumber}
-              onChange={(e) => onChange("cnicNumber", e.target.value)}
-              placeholder="CNIC Number"
-              className={dialogInputClass}
+              onChange={(e) => change("cnicNumber", e.target.value)}
+              placeholder="42201-1234567-1"
+              className={cn(dialogInputClass, errors.cnicNumber && fieldErrorInputClass)}
             />
+            <FieldError message={errors.cnicNumber} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>NTN</label>
             <input
+              inputMode="numeric"
               type="text"
               value={values.ntn}
-              onChange={(e) => onChange("ntn", e.target.value)}
+              onChange={(e) => change("ntn", e.target.value)}
               placeholder="NTN"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.ntn && fieldErrorInputClass)}
             />
+            <FieldError message={errors.ntn} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Client Address</label>
             <input
+              maxLength={250}
               type="text"
               value={values.clientAddress}
-              onChange={(e) => onChange("clientAddress", e.target.value)}
+              onChange={(e) => change("clientAddress", e.target.value)}
               placeholder="Client Address"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.clientAddress && fieldErrorInputClass)}
             />
+            <FieldError message={errors.clientAddress} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Client Area</label>
             <input
+              maxLength={100}
               type="text"
               value={values.clientArea}
-              onChange={(e) => onChange("clientArea", e.target.value)}
+              onChange={(e) => change("clientArea", e.target.value)}
               placeholder="Client Area"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.clientArea && fieldErrorInputClass)}
             />
+            <FieldError message={errors.clientArea} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Select City</label>
+            <label className={dialogLabelClass}>Select City<Required /></label>
             <select
               value={values.cityId}
-              onChange={(e) => onChange("cityId", e.target.value)}
-              className={dialogInputClass}
+              onChange={(e) => change("cityId", e.target.value)}
+              className={cn(dialogInputClass, errors.cityId && fieldErrorInputClass)}
               required
             >
               <option value="">Select City</option>
@@ -148,14 +191,15 @@ export function OnboardClientInfoStep({
                 </option>
               ))}
             </select>
+            <FieldError message={errors.cityId} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Select Sale Person</label>
+            <label className={dialogLabelClass}>Select Sale Person<Required /></label>
             <select
               value={values.salesPersonId}
-              onChange={(e) => onChange("salesPersonId", e.target.value)}
-              className={dialogInputClass}
+              onChange={(e) => change("salesPersonId", e.target.value)}
+              className={cn(dialogInputClass, errors.salesPersonId && fieldErrorInputClass)}
               required
             >
               <option value="">Select Sale Person</option>
@@ -165,6 +209,7 @@ export function OnboardClientInfoStep({
                 </option>
               ))}
             </select>
+            <FieldError message={errors.salesPersonId} />
           </div>
         </div>
       </div>
@@ -174,47 +219,54 @@ export function OnboardClientInfoStep({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Contact Person</label>
+            <label className={dialogLabelClass}>Contact Person<Required /></label>
             <input
+              maxLength={100}
               type="text"
               value={values.pickupContactPerson}
-              onChange={(e) => onChange("pickupContactPerson", e.target.value)}
+              onChange={(e) => change("pickupContactPerson", e.target.value)}
               placeholder="Contact Person"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.pickupContactPerson && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.pickupContactPerson} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Contact Phone</label>
+            <label className={dialogLabelClass}>Contact Phone<Required /></label>
             <input
+              inputMode="tel"
+              maxLength={13}
               type="tel"
               value={values.pickupContactPhone}
-              onChange={(e) => onChange("pickupContactPhone", e.target.value)}
-              placeholder="Contact Phone"
-              className={dialogInputClass}
+              onChange={(e) => change("pickupContactPhone", e.target.value)}
+              placeholder="03001234567"
+              className={cn(dialogInputClass, errors.pickupContactPhone && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.pickupContactPhone} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Location Name</label>
+            <label className={dialogLabelClass}>Location Name<Required /></label>
             <input
+              maxLength={100}
               type="text"
               value={values.pickupLocationName}
-              onChange={(e) => onChange("pickupLocationName", e.target.value)}
+              onChange={(e) => change("pickupLocationName", e.target.value)}
               placeholder="Location Name"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.pickupLocationName && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.pickupLocationName} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Select Pickup City</label>
+            <label className={dialogLabelClass}>Select Pickup City<Required /></label>
             <select
               value={values.pickupCityId}
-              onChange={(e) => onChange("pickupCityId", e.target.value)}
-              className={dialogInputClass}
+              onChange={(e) => change("pickupCityId", e.target.value)}
+              className={cn(dialogInputClass, errors.pickupCityId && fieldErrorInputClass)}
               required
             >
               <option value="">--Select Pickup City--</option>
@@ -224,30 +276,35 @@ export function OnboardClientInfoStep({
                 </option>
               ))}
             </select>
+            <FieldError message={errors.pickupCityId} />
           </div>
 
           <div className="space-y-1">
-            <label className={dialogLabelClass}>Area</label>
+            <label className={dialogLabelClass}>Area<Required /></label>
             <input
+              maxLength={100}
               type="text"
               value={values.pickupArea}
-              onChange={(e) => onChange("pickupArea", e.target.value)}
+              onChange={(e) => change("pickupArea", e.target.value)}
               placeholder="Area"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.pickupArea && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.pickupArea} />
           </div>
 
           <div className="space-y-1 md:col-span-2">
-            <label className={dialogLabelClass}>Address</label>
+            <label className={dialogLabelClass}>Address<Required /></label>
             <input
+              maxLength={250}
               type="text"
               value={values.pickupAddress}
-              onChange={(e) => onChange("pickupAddress", e.target.value)}
+              onChange={(e) => change("pickupAddress", e.target.value)}
               placeholder="Address"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, errors.pickupAddress && fieldErrorInputClass)}
               required
             />
+            <FieldError message={errors.pickupAddress} />
           </div>
         </div>
 
@@ -271,67 +328,78 @@ export function OnboardClientInfoStep({
           <div className="space-y-1">
             <label className={dialogLabelClass}>Bank Name</label>
             <input
+              maxLength={100}
               type="text"
               value={bankDetails.bankName}
-              onChange={(e) => onBankDetailsChange("bankName", e.target.value)}
+              onChange={(e) => changeBank("bankName", e.target.value)}
               placeholder="Bank Name"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, bankErrors.bankName && fieldErrorInputClass)}
             />
+            <FieldError message={bankErrors.bankName} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Account Title</label>
             <input
+              maxLength={100}
               type="text"
               value={bankDetails.accountTitle}
-              onChange={(e) => onBankDetailsChange("accountTitle", e.target.value)}
+              onChange={(e) => changeBank("accountTitle", e.target.value)}
               placeholder="Account Title"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, bankErrors.accountTitle && fieldErrorInputClass)}
             />
+            <FieldError message={bankErrors.accountTitle} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Branch Name</label>
             <input
+              maxLength={100}
               type="text"
               value={bankDetails.branchName}
-              onChange={(e) => onBankDetailsChange("branchName", e.target.value)}
+              onChange={(e) => changeBank("branchName", e.target.value)}
               placeholder="Branch Name"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, bankErrors.branchName && fieldErrorInputClass)}
             />
+            <FieldError message={bankErrors.branchName} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>IBAN</label>
             <input
+              placeholder="PK36SCBL0000001123456702"
               type="text"
               value={bankDetails.iban}
-              onChange={(e) => onBankDetailsChange("iban", e.target.value)}
-              placeholder="IBAN"
-              className={dialogInputClass}
+              onChange={(e) => changeBank("iban", e.target.value)}
+              className={cn(dialogInputClass, bankErrors.iban && fieldErrorInputClass)}
             />
+            <FieldError message={bankErrors.iban} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Account Number</label>
             <input
+              inputMode="numeric"
               type="text"
               value={bankDetails.accountNumber}
-              onChange={(e) => onBankDetailsChange("accountNumber", e.target.value)}
+              onChange={(e) => changeBank("accountNumber", e.target.value)}
               placeholder="Account Number"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, bankErrors.accountNumber && fieldErrorInputClass)}
             />
+            <FieldError message={bankErrors.accountNumber} />
           </div>
 
           <div className="space-y-1">
             <label className={dialogLabelClass}>Bank City</label>
             <input
+              maxLength={100}
               type="text"
               value={bankDetails.bankCity}
-              onChange={(e) => onBankDetailsChange("bankCity", e.target.value)}
+              onChange={(e) => changeBank("bankCity", e.target.value)}
               placeholder="Bank City"
-              className={dialogInputClass}
+              className={cn(dialogInputClass, bankErrors.bankCity && fieldErrorInputClass)}
             />
+            <FieldError message={bankErrors.bankCity} />
           </div>
         </div>
       </div>

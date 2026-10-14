@@ -12,6 +12,7 @@ import { parseContentDispositionFilename } from '@/lib/format';
 import { formatOrderDate, formatAmount } from '@/components/orders/order-columns';
 import type { Rider } from '@/lib/types/rider';
 import type { CreateReturnDocumentPayload } from '@/lib/types/order';
+import { sanitize } from '@/lib/validation';
 
 interface ReturnDocumentOrderRow {
   awbNo: string;
@@ -273,7 +274,7 @@ export default function ReturnDocumentPage() {
             <input
               type="text"
               value={awbInput}
-              onChange={(e) => setAwbInput(e.target.value)}
+              onChange={(e) => setAwbInput(sanitize.awbList(e.target.value))}
               onKeyDown={handleAwbKeyDown}
               placeholder="Tracking ID #, press Enter"
               className="w-full h-10 px-4 bg-white border border-slate-200 rounded text-xs font-bold text-primary focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-slate-300"

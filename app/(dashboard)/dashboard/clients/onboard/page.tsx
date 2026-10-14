@@ -9,6 +9,18 @@ import { OnboardDeliveryChargesStep } from "@/components/clients/onboard/Onboard
 import { OnboardDocumentsStep } from "@/components/clients/onboard/OnboardDocumentsStep";
 import { buildOnboardClientPayload } from "@/lib/clients/build-onboard-payload";
 import { validateDeliverySettings } from "@/lib/clients/delivery-charges-form";
+import {
+  BANK_DETAILS_RULES,
+  ONBOARD_INFO_RULES,
+  validateServiceCharges,
+} from "@/lib/clients/onboard-validation";
+import {
+  FIX_FIELDS_MESSAGE,
+  clearFieldError,
+  hasErrors,
+  validateFields,
+  type FieldErrors,
+} from "@/lib/validation";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { Admin } from "@/types/admin";
 import type { City } from "@/lib/types/city";
@@ -52,20 +64,7 @@ function hasEnabledZoneCharges(serviceCharges: ServiceChargeConfig[]): boolean {
   );
 }
 
-function validateClientInfo(values: OnboardClientInfoValues): string | null {
-  if (!values.clientName.trim()) return "Client name is required.";
-  if (!values.contactNumber.trim()) return "Contact number is required.";
-  if (!values.clientEmail.trim()) return "Client email is required.";
-  if (!values.cityId) return "Please select a city.";
-  if (!values.salesPersonId) return "Please select a sale person.";
-  if (!values.pickupCityId) return "Please select a pickup city.";
-  if (!values.pickupContactPerson.trim()) return "Pickup contact person is required.";
-  if (!values.pickupContactPhone.trim()) return "Pickup contact phone is required.";
-  if (!values.pickupLocationName.trim()) return "Pickup location name is required.";
-  if (!values.pickupArea.trim()) return "Pickup area is required.";
-  if (!values.pickupAddress.trim()) return "Pickup address is required.";
-  return null;
-}
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 
 export default function OnboardClientPage() {
   const router = useRouter();
@@ -87,6 +86,8 @@ export default function OnboardClientPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoErrors, setInfoErrors] = useState<FieldErrors<OnboardClientInfoValues>>({});
+  const [bankErrors, setBankErrors] = useState<FieldErrors<BankDetailsValues>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -151,10 +152,21 @@ export default function OnboardClientPage() {
 
   const setInfoField = (field: keyof OnboardClientInfoValues, value: string | boolean) => {
     setInfoValues((prev) => ({ ...prev, [field]: value }));
+    setInfoErrors((prev) => clearFieldError(prev, field));
   };
 
   const setBankDetailsField = (field: keyof BankDetailsValues, value: string) => {
     setBankDetails((prev) => ({ ...prev, [field]: value }));
+    setBankErrors((prev) => clearFieldError(prev, field));
+  };
+
+  /** Validates step 1 and shows the errors under each field. */
+  const validateClientInfoStep = (): boolean => {
+    const nextInfoErrors = validateFields(infoValues, ONBOARD_INFO_RULES);
+    const nextBankErrors = validateFields(bankDetails, BANK_DETAILS_RULES);
+    setInfoErrors(nextInfoErrors);
+    setBankErrors(nextBankErrors);
+    return !hasErrors(nextInfoErrors) && !hasErrors(nextBankErrors);
   };
 
   const setDocumentField = (field: keyof ClientDocumentFiles, file: File | null) => {
@@ -168,9 +180,8 @@ export default function OnboardClientPage() {
   }, [step]);
 
   const handleNext = () => {
-    const validationError = validateClientInfo(infoValues);
-    if (validationError) {
-      setError(validationError);
+    if (!validateClientInfoStep()) {
+      setError(FIX_FIELDS_MESSAGE);
       return;
     }
     setError(null);
@@ -187,9 +198,8 @@ export default function OnboardClientPage() {
   };
 
   const handleCreateClient = async () => {
-    const validationError = validateClientInfo(infoValues);
-    if (validationError) {
-      setError(validationError);
+    if (!validateClientInfoStep()) {
+      setError(FIX_FIELDS_MESSAGE);
       setStep("client-info");
       return;
     }
@@ -199,7 +209,8 @@ export default function OnboardClientPage() {
       return;
     }
 
-    const deliveryValidationError = validateDeliverySettings(deliverySettings);
+    const deliveryValidationError =
+      validateDeliverySettings(deliverySettings) ?? validateServiceCharges(serviceCharges);
     if (deliveryValidationError) {
       setError(deliveryValidationError);
       return;
@@ -261,6 +272,14 @@ export default function OnboardClientPage() {
       !documentFiles.blankCheque
     ) {
       setError("Please upload logo, CNIC front, CNIC back, and bank cheque images.");
+      return;
+    }
+
+    const invalidDocument = Object.values(documentFiles).find(
+      (file) => file && (!file.type.startsWith("image/") || file.size > MAX_DOCUMENT_BYTES)
+    );
+    if (invalidDocument) {
+      setError(`${invalidDocument.name} must be an image of 5 MB or less.`);
       return;
     }
 
@@ -343,6 +362,8 @@ export default function OnboardClientPage() {
               onBankDetailsChange={setBankDetailsField}
               cities={cities}
               admins={admins}
+              errors={infoErrors}
+              bankErrors={bankErrors}
             />
           ) : step === "delivery-charges" ? (
             <OnboardDeliveryChargesStep

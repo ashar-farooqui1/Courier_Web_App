@@ -107,7 +107,8 @@ const OtpVerificationForm = ({
                 icon={<KeyRound size={18} className="text-primary/60" />}
                 className="h-12 bg-slate-50 border-slate-200 focus:bg-white transition-all tracking-[0.3em] font-bold"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                maxLength={8}
                 autoComplete="one-time-code"
                 required
                 disabled={loading}
