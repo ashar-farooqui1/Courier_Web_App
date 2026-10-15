@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { FileOutput, Trash2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
+import { buildClientsRequestHeaders, clientsApiUrl, parseClientsPayload } from "@/lib/clients/clients-request";
 import type { Client } from "@/lib/types/client";
 
 const DocumentFilter = ({
@@ -52,9 +52,9 @@ export default function AdminLoadsheetDocumentView() {
   const [selectedClientId, setSelectedClientId] = useState("");
 
   useEffect(() => {
-    fetch("/api/clients", { headers: buildClientsRequestHeaders() })
+    fetch(clientsApiUrl(), { headers: buildClientsRequestHeaders() })
       .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setClients(Array.isArray(data) ? data : []))
+      .then((data) => setClients(parseClientsPayload(data)))
       .catch(() => setClients([]));
   }, []);
 

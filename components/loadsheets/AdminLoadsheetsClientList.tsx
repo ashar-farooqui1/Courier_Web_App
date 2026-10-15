@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { FileStack, X } from "lucide-react";
-import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
+import { buildClientsRequestHeaders, clientsApiUrl, parseClientsPayload } from "@/lib/clients/clients-request";
 import type { Client } from "@/lib/types/client";
 
 export default function AdminLoadsheetsClientList() {
@@ -16,13 +16,13 @@ export default function AdminLoadsheetsClientList() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
+      const response = await fetch(clientsApiUrl(), { headers: buildClientsRequestHeaders() });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         const message = payload && !Array.isArray(payload) ? payload.message : undefined;
         throw new Error(message ?? `Failed to load clients (${response.status})`);
       }
-      setClients(Array.isArray(payload) ? payload : []);
+      setClients(parseClientsPayload(payload));
     } catch (err) {
       setClients([]);
       setError(err instanceof Error ? err.message : "Failed to load clients");

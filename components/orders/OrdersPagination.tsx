@@ -4,7 +4,7 @@ import React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const ORDERS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+export const ORDERS_PAGE_SIZE_OPTIONS = [10, 20, 25, 50, 100] as const;
 
 export function PageSizeSelect({
   pageSize,

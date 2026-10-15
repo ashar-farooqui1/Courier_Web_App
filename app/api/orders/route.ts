@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createOrder, getOrders, getOrdersByClient } from '@/lib/api/order';
 import { ApiError } from '@/lib/api/http';
-import { parseApiErrorMessage } from '@/lib/api/errors';import {
+import { parseApiErrorMessage } from '@/lib/api/errors';
+import {
   readAppRequestContext,
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
-import { isSaleManagerRole, isStaffRole } from '@/lib/auth/role';
+import { isStaffRole } from '@/lib/auth/role';
+import { DEFAULT_ORDERS_PAGE_SIZE, paginateItems } from '@/lib/types/paged-list';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
 function readString(value: unknown): string {
@@ -36,7 +38,12 @@ function getBearerToken(request: Request): string | undefined {
   return token || undefined;
 }
 
-/** Proxies GET /api/Order/GetOrders (optional ?clientId=) */
+function readPageParam(value: string | null, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/** Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize= (optional ?clientId=) */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
 
@@ -47,6 +54,10 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const clientIdParam = searchParams.get('clientId');
   const clientId = clientIdParam ? Number(clientIdParam) : undefined;
+  const pageNumParam = searchParams.get('pageNum');
+  const pageSizeParam = searchParams.get('pageSize');
+  const pageNum = readPageParam(pageNumParam, 1);
+  const pageSize = readPageParam(pageSizeParam, DEFAULT_ORDERS_PAGE_SIZE);
 
   if (
     clientIdParam &&
@@ -63,27 +74,25 @@ export async function GET(request: Request) {
   }
 
   try {
-    if (isSaleManagerRole(ctx.role)) {
-      if (ctx.userId < 1) {
+    if (scoped.clientId) {
+      const orders = await getOrdersByClient(scoped.clientId, token);
+      if (!pageNumParam && !pageSizeParam) {
         return NextResponse.json(
-          { message: 'Session not found. Please log in again.' },
-          { status: 403 }
+          paginateItems(orders, 1, Math.max(orders.length, DEFAULT_ORDERS_PAGE_SIZE))
         );
       }
-
-      const orders = await getOrders(token, ctx.userId);
-      if (!scoped.clientId) {
-        return NextResponse.json(orders);
-      }
-
-      const clientOrders = await getOrdersByClient(scoped.clientId, token);
-      const allowedIds = new Set(orders.map((order) => order.orderId));
-      return NextResponse.json(clientOrders.filter((order) => allowedIds.has(order.orderId)));
+      return NextResponse.json(paginateItems(orders, pageNum, pageSize));
     }
 
-    const orders = scoped.clientId
-      ? await getOrdersByClient(scoped.clientId, token)
-      : await getOrders(token);
+    if (isStaffRole(ctx.role) && ctx.role !== 'super-admin' && ctx.userId < 1) {
+      return NextResponse.json(
+        { message: 'Session not found. Please log in again.' },
+        { status: 403 }
+      );
+    }
+
+    const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
+    const orders = await getOrders(token, { adminId, pageNum, pageSize });
     return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {

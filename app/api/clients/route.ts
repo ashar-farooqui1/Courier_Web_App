@@ -3,10 +3,16 @@ import { createClient, getClients } from '@/lib/api/clients';
 import { readAppRequestContext } from '@/lib/api/app-request-context';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { ApiError } from '@/lib/api/http';
+import { DEFAULT_CLIENTS_PAGE_SIZE } from '@/lib/types/paged-list';
+
+function readPageParam(value: string | null, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 /**
- * Proxies GET /api/Client.
- * Super Admin loads every client (no adminId). Other roles load only their clients.
+ * Proxies GET /api/Client?adminId=&pageNum=&pageSize=.
+ * Super Admin: adminId=NULL. Other roles: adminId={their id}.
  */
 export async function GET(request: Request) {
   const ctx = readAppRequestContext(request);
@@ -18,10 +24,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const adminId = ctx.role === 'super-admin' ? undefined : ctx.userId;
+  const { searchParams } = new URL(request.url);
+  const pageNum = readPageParam(searchParams.get('pageNum'), 1);
+  const pageSize = readPageParam(searchParams.get('pageSize'), DEFAULT_CLIENTS_PAGE_SIZE);
+  const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
 
   try {
-    const clients = await getClients(adminId);
+    const clients = await getClients({ adminId, pageNum, pageSize });
     return NextResponse.json(clients);
   } catch (error) {
     if (error instanceof ApiError) {

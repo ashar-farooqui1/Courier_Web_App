@@ -9,7 +9,8 @@ import { PageSizeSelect, OrdersPaginationFooter } from "@/components/orders/Orde
 import { formatAmount, formatOrderDate } from "@/components/orders/order-columns";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
-import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
+import { buildClientsRequestHeaders, clientsApiUrl, parseClientsPayload } from "@/lib/clients/clients-request";
+import { LOOKUP_PAGE_SIZE } from "@/lib/types/paged-list";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
 import { exportOrdersToCsv } from "@/lib/orders/order-export";
@@ -102,9 +103,9 @@ export default function AdminOrderDetailsReportView() {
   const loadClients = useCallback(async () => {
     setLoadingClients(true);
     try {
-      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
-      const payload = (await response.json().catch(() => null)) as Client[] | null;
-      setClients(response.ok && Array.isArray(payload) ? payload : []);
+      const response = await fetch(clientsApiUrl(), { headers: buildClientsRequestHeaders() });
+      const payload = await response.json().catch(() => null);
+      setClients(response.ok ? parseClientsPayload(payload) : []);
     } catch {
       setClients([]);
     } finally {
@@ -123,8 +124,9 @@ export default function AdminOrderDetailsReportView() {
     }
 
     const clientId = Number(appliedFilters.clientId);
-    const ordersUrl =
-      Number.isInteger(clientId) && clientId > 0 ? `/api/orders?clientId=${clientId}` : "/api/orders";
+    const params = new URLSearchParams({ pageNum: "1", pageSize: String(LOOKUP_PAGE_SIZE) });
+    if (Number.isInteger(clientId) && clientId > 0) params.set("clientId", String(clientId));
+    const ordersUrl = `/api/orders?${params.toString()}`;
 
     setLoading(true);
     setOrdersError(null);

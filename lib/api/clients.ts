@@ -1,6 +1,12 @@
 import { API_BASE_URL, API_ROUTES } from '@/lib/api/config';
 import { ApiError, apiGet, apiPostForm } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
+import {
+  buildPagedAdminQuery,
+  DEFAULT_CLIENTS_PAGE_SIZE,
+  unwrapPagedPayload,
+  type PagedList,
+} from '@/lib/types/paged-list';
 import type { Client, UpdateClientPayload } from '@/lib/types/client';
 import type { CreateClientResponse } from '@/lib/types/create-client';
 import type { OnboardClientRequest, OnboardClientResponse } from '@/lib/types/onboard-client';
@@ -12,12 +18,23 @@ interface ClientsApiResponse<T> {
   details?: unknown;
 }
 
-function unwrapClientsList(response: ClientsApiResponse<Client[]> | Client[]): Client[] {
-  if (Array.isArray(response)) {
-    return response;
-  }
+function normalizeClient(raw: unknown): Client | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const client = raw as Client;
+  return typeof client.clientId === 'number' ? client : null;
+}
 
-  return Array.isArray(response.data) ? response.data : [];
+export function unwrapPagedClients(payload: unknown): PagedList<Client> {
+  try {
+    return unwrapPagedPayload(payload, normalizeClient);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      parseApiErrorMessage(payload, error instanceof Error ? error.message : 'Failed to fetch clients'),
+      500,
+      payload
+    );
+  }
 }
 
 function unwrapClient(response: ClientsApiResponse<Client> | Client): Client {
@@ -62,13 +79,18 @@ async function parseClientMutationResponse(
   return body.message ?? successMessage;
 }
 
-export async function getClients(adminId?: number): Promise<Client[]> {
-  const path =
-    Number.isInteger(adminId) && (adminId as number) > 0
-      ? `${API_ROUTES.clients}?adminId=${adminId}`
-      : API_ROUTES.clients;
-  const response = await apiGet<ClientsApiResponse<Client[]> | Client[]>(path);
-  return unwrapClientsList(response);
+export async function getClients(options?: {
+  adminId?: number | null;
+  pageNum?: number;
+  pageSize?: number;
+}): Promise<PagedList<Client>> {
+  const query = buildPagedAdminQuery({
+    adminId: options?.adminId,
+    pageNum: options?.pageNum ?? 1,
+    pageSize: options?.pageSize ?? DEFAULT_CLIENTS_PAGE_SIZE,
+  });
+  const response = await apiGet<unknown>(`${API_ROUTES.clients}?${query}`);
+  return unwrapPagedClients(response);
 }
 
 export async function getClientById(clientId: number): Promise<Client> {
@@ -199,7 +221,7 @@ async function resolveOnboardedClientId(
   const clientEmail = normalizeLookupValue(payload.client.clientEmail);
   const brandName = normalizeLookupValue(payload.client.brandName);
 
-  const clients = await getClients();
+  const clients = (await getClients({ adminId: null, pageNum: 1, pageSize: 500 })).items;
   const strictMatches = clients.filter(
     (client) =>
       normalizeLookupValue(client.clientName) === clientName &&

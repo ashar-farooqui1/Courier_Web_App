@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageSizeSelect, OrdersPaginationFooter } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
-import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
+import { buildClientsRequestHeaders, clientsApiUrl, parseClientsPayload } from "@/lib/clients/clients-request";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { formatAmount, formatOrderDate } from "@/components/orders/order-columns";
 import { formatArrivalAt, formatTimeOfDay } from "@/lib/format";
@@ -123,7 +123,7 @@ export default function AdminPickedUpReportView() {
     setLoadingLookups(true);
     try {
       const [clientsRes, ridersRes, citiesRes] = await Promise.all([
-        fetch("/api/clients", { headers: buildClientsRequestHeaders() }),
+        fetch(clientsApiUrl(), { headers: buildClientsRequestHeaders() }),
         fetch("/api/riders"),
         fetch("/api/cities"),
       ]);
@@ -132,7 +132,7 @@ export default function AdminPickedUpReportView() {
         ridersRes.json().catch(() => null),
         citiesRes.json().catch(() => null),
       ]);
-      setClients(clientsRes.ok && Array.isArray(clientsPayload) ? clientsPayload : []);
+      setClients(clientsRes.ok ? parseClientsPayload(clientsPayload) : []);
       setRiders(ridersRes.ok && Array.isArray(ridersPayload) ? ridersPayload : []);
       setCities(citiesRes.ok && Array.isArray(citiesPayload) ? citiesPayload : []);
     } catch {

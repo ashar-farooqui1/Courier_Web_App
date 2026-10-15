@@ -6,7 +6,8 @@ import { ChevronDown, Calendar } from "lucide-react";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseApiErrorMessage } from "@/lib/api/errors";
-import { unwrapOrdersList } from "@/lib/api/order";
+import { unwrapPagedOrders } from "@/lib/api/order";
+import { LOOKUP_PAGE_SIZE } from "@/lib/types/paged-list";
 import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import type { ClientOrder } from "@/lib/types/order";
 import ShipmentFinancialSummary from "@/components/dashboard/ShipmentFinancialSummary";
@@ -63,6 +64,7 @@ export default function AdminDashboardView() {
   );
 
   const [orders, setOrders] = useState<ClientOrder[]>([]);
+  const [totalOrders, setTotalOrders] = useState(0);
   const [ordersError, setOrdersError] = useState<string | null>(null);
 
   const loadOrders = useCallback(async () => {
@@ -71,7 +73,7 @@ export default function AdminDashboardView() {
     setOrdersError(null);
 
     try {
-      const response = await fetch("/api/orders", {
+      const response = await fetch(`/api/orders?pageNum=1&pageSize=${LOOKUP_PAGE_SIZE}`, {
         headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
       });
 
@@ -81,9 +83,12 @@ export default function AdminDashboardView() {
         throw new Error(parseApiErrorMessage(payload, `Failed to load orders (${response.status})`));
       }
 
-      setOrders(unwrapOrdersList(payload));
+      const paged = unwrapPagedOrders(payload);
+      setOrders(paged.items);
+      setTotalOrders(paged.totalCount);
     } catch (err) {
       setOrders([]);
+      setTotalOrders(0);
       setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
     }
   }, [ready, token, role, user]);
@@ -94,7 +99,7 @@ export default function AdminDashboardView() {
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <DashboardHeroBanner greetingName={username} totalOrders={orders.length} />
+      <DashboardHeroBanner greetingName={username} totalOrders={totalOrders} />
 
       <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

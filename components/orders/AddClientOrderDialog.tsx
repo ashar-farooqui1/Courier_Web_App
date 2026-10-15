@@ -5,7 +5,7 @@ import { ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
-import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
+import { buildClientsRequestHeaders, clientsApiUrl, parseClientsPayload } from "@/lib/clients/clients-request";
 import { logout } from "@/lib/auth/role";
 import { getDefaultWarehouse } from "@/lib/auth/warehouse";
 import type { CreateOrderPayload, OrderPickupLocationDetails } from "@/lib/types/order";
@@ -176,11 +176,8 @@ export function AddClientOrderDialog({
     setClientsError(null);
 
     try {
-      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
-      const payload = (await response.json().catch(() => null)) as
-        | Client[]
-        | { message?: string }
-        | null;
+      const response = await fetch(clientsApiUrl(), { headers: buildClientsRequestHeaders() });
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
         const message =
@@ -188,7 +185,7 @@ export function AddClientOrderDialog({
         throw new Error(message ?? `Failed to load clients (${response.status})`);
       }
 
-      setClients(Array.isArray(payload) ? payload : []);
+      setClients(parseClientsPayload(payload));
     } catch (err) {
       setClients([]);
       setClientsError(err instanceof Error ? err.message : "Failed to load clients");

@@ -33,9 +33,10 @@ const ORDER_COLUMNS = [...BASE_ORDER_COLUMNS, ...ADMIN_ONLY_ORDER_COLUMNS];
 import { OrdersPaginationFooter, PageSizeSelect } from "@/components/orders/OrdersPagination";
 import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
-import { buildClientsRequestHeaders } from "@/lib/clients/clients-request";
+import { buildClientsRequestHeaders, clientsApiUrl, parseClientsPayload } from "@/lib/clients/clients-request";
+import { DEFAULT_ORDERS_PAGE_SIZE } from "@/lib/types/paged-list";
 import { parseApiErrorMessage } from "@/lib/api/errors";
-import { unwrapOrdersList } from "@/lib/api/order";
+import { unwrapPagedOrders } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import { exportOrdersToExcel } from "@/lib/orders/order-export";
 import { ORDER_STATUS_OPTIONS, isOrderStatusApiValue, normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
@@ -272,7 +273,8 @@ export default function AdminOrdersView() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(DEFAULT_ORDERS_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
   const emptyOrderFilters = {
     awbId: "",
     referenceId: "",
@@ -305,11 +307,8 @@ export default function AdminOrdersView() {
     setClientsError(null);
 
     try {
-      const response = await fetch("/api/clients", { headers: buildClientsRequestHeaders() });
-      const payload = (await response.json().catch(() => null)) as
-        | Client[]
-        | { message?: string }
-        | null;
+      const response = await fetch(clientsApiUrl(), { headers: buildClientsRequestHeaders() });
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
         const message =
@@ -317,7 +316,7 @@ export default function AdminOrdersView() {
         throw new Error(message ?? `Failed to load clients (${response.status})`);
       }
 
-      setClients(Array.isArray(payload) ? payload : []);
+      setClients(parseClientsPayload(payload));
     } catch (err) {
       setClients([]);
       setClientsError(err instanceof Error ? err.message : "Failed to load clients");
@@ -337,10 +336,14 @@ export default function AdminOrdersView() {
     }
 
     const clientId = Number(selectedClientId);
-    const ordersUrl =
-      Number.isInteger(clientId) && clientId > 0
-        ? `/api/orders?clientId=${clientId}`
-        : "/api/orders";
+    const params = new URLSearchParams({
+      pageNum: String(page),
+      pageSize: String(pageSize),
+    });
+    if (Number.isInteger(clientId) && clientId > 0) {
+      params.set("clientId", String(clientId));
+    }
+    const ordersUrl = `/api/orders?${params.toString()}`;
 
     setLoadingOrders(true);
     setOrdersError(null);
@@ -358,7 +361,9 @@ export default function AdminOrdersView() {
         );
       }
 
-      const fetchedOrders = unwrapOrdersList(payload);
+      const paged = unwrapPagedOrders(payload);
+      const fetchedOrders = paged.items;
+      setTotalCount(paged.totalCount);
 
       if (!fetchedOrders.some(isMnpOrder)) {
         setOrders(fetchedOrders);
@@ -385,11 +390,12 @@ export default function AdminOrdersView() {
       }
     } catch (err) {
       setOrders([]);
+      setTotalCount(0);
       setOrdersError(err instanceof Error ? err.message : "Failed to load orders");
     } finally {
       setLoadingOrders(false);
     }
-  }, [ready, role, selectedClientId, token, user?.userId]);
+  }, [page, pageSize, ready, role, selectedClientId, token, user?.userId]);
 
   useEffect(() => {
     if (ready) {
@@ -543,15 +549,10 @@ export default function AdminOrdersView() {
 
   useEffect(() => {
     setPage(1);
-  }, [tableSearch, appliedFilters, orders]);
+  }, [appliedFilters, selectedClientId, pageSize]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-
-  const pagedOrders = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, currentPage, pageSize]);
+  const currentPage = page;
+  const pagedOrders = filteredOrders;
 
   const matchedOrderIds = useMemo(
     () => filteredOrders.map((order) => order.orderId),
@@ -1489,7 +1490,7 @@ export default function AdminOrdersView() {
         <OrdersPaginationFooter
           page={currentPage}
           pageSize={pageSize}
-          totalItems={filteredOrders.length}
+          totalItems={totalCount}
           onPageChange={setPage}
         />
       </div>

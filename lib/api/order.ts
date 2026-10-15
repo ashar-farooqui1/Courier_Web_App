@@ -2,6 +2,12 @@ import { API_BASE_URL, API_ROUTES } from '@/lib/api/config';
 import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { parseContentDispositionFilename } from '@/lib/format';
+import {
+  buildPagedAdminQuery,
+  DEFAULT_ORDERS_PAGE_SIZE,
+  unwrapPagedPayload,
+  type PagedList,
+} from '@/lib/types/paged-list';
 import type {
   AddOrderRemarkPayload,
   BulkUploadApiResponse,
@@ -256,33 +262,21 @@ export function normalizeClientOrder(raw: unknown): ClientOrder | null {
   };
 }
 
-export function unwrapOrdersList(payload: unknown): ClientOrder[] {
-  if (!payload) return [];
-
-  let rows: unknown[] = [];
-
-  if (Array.isArray(payload)) {
-    rows = payload;
-  } else if (typeof payload === 'object') {
-    const record = payload as Record<string, unknown>;
-    const success = record.success ?? record.Success;
-    if (success === false) {
-      throw new ApiError(
-        parseApiErrorMessage(payload, 'Failed to fetch orders'),
-        500,
-        payload
-      );
-    }
-
-    const data = record.data ?? record.Data;
-    if (Array.isArray(data)) {
-      rows = data;
-    }
+export function unwrapPagedOrders(payload: unknown): PagedList<ClientOrder> {
+  try {
+    return unwrapPagedPayload(payload, normalizeClientOrder);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      parseApiErrorMessage(payload, error instanceof Error ? error.message : 'Failed to fetch orders'),
+      500,
+      payload
+    );
   }
+}
 
-  return rows
-    .map(normalizeClientOrder)
-    .filter((order): order is ClientOrder => order !== null);
+export function unwrapOrdersList(payload: unknown): ClientOrder[] {
+  return unwrapPagedOrders(payload).items;
 }
 
 async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientOrder[]> {
@@ -326,13 +320,60 @@ async function fetchOrdersFromApi(path: string, token?: string): Promise<ClientO
   }
 }
 
-/** GET /api/Order/GetOrders — all orders. Pass adminId to limit the list to a Sale Manager. */
-export async function getOrders(token?: string, adminId?: number): Promise<ClientOrder[]> {
-  const path =
-    Number.isInteger(adminId) && (adminId as number) > 0
-      ? `${API_ROUTES.orders}?adminId=${adminId}`
-      : API_ROUTES.orders;
-  return fetchOrdersFromApi(path, token);
+async function fetchPagedOrdersFromApi(path: string, token?: string): Promise<PagedList<ClientOrder>> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'GET',
+    headers,
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : text;
+    } catch {
+      /* plain text or empty */
+    }
+    throw new ApiError(
+      parseApiErrorMessage(body, `Failed to fetch orders (${response.status})`),
+      response.status,
+      body
+    );
+  }
+
+  if (!text) {
+    return unwrapPagedOrders([]);
+  }
+
+  try {
+    return unwrapPagedOrders(JSON.parse(text) as unknown);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    return unwrapPagedOrders([]);
+  }
+}
+
+/** GET /api/Order/GetOrders?adminId=&pageNum=&pageSize= */
+export async function getOrders(
+  token?: string,
+  options?: { adminId?: number | null; pageNum?: number; pageSize?: number }
+): Promise<PagedList<ClientOrder>> {
+  const query = buildPagedAdminQuery({
+    adminId: options?.adminId,
+    pageNum: options?.pageNum ?? 1,
+    pageSize: options?.pageSize ?? DEFAULT_ORDERS_PAGE_SIZE,
+  });
+  return fetchPagedOrdersFromApi(`${API_ROUTES.orders}?${query}`, token);
 }
 
 /** GET /api/Order/GetOrdersByClient?clientId={clientId} — client's own orders */

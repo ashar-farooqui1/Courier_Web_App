@@ -10,12 +10,13 @@ import type { Admin } from '@/types/admin';
 import { AssignClientDialog } from '@/components/clients/AssignClientDialog';
 import { EditClientDialog } from '@/components/clients/EditClientDialog';
 import { useAuthSession } from '@/hooks/useAuthRole';
-import { buildClientsRequestHeaders } from '@/lib/clients/clients-request';
+import { buildClientsRequestHeaders, parseClientsPage } from '@/lib/clients/clients-request';
+import { DEFAULT_CLIENTS_PAGE_SIZE } from '@/lib/types/paged-list';
+import { OrdersPaginationFooter, PageSizeSelect } from '@/components/orders/OrdersPagination';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
   emptyClientSearchFilters,
   filterClients,
-  hasActiveClientFilters,
   type ClientSearchFilters,
 } from '@/lib/clients/filter-clients';
 
@@ -40,27 +41,34 @@ export default function ClientsPage() {
   const [deletingClientId, setDeletingClientId] = useState<number | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_CLIENTS_PAGE_SIZE);
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/clients', { headers: buildClientsRequestHeaders() });
+      const response = await fetch(`/api/clients?pageNum=${page}&pageSize=${pageSize}`, {
+        headers: buildClientsRequestHeaders(),
+      });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as {
           message?: string;
         } | null;
         throw new Error(payload?.message ?? `Failed to load clients (${response.status})`);
       }
-      const data = (await response.json()) as Client[];
-      setClients(Array.isArray(data) ? data : []);
+      const data = parseClientsPage(await response.json());
+      setClients(data.items);
+      setTotalCount(data.totalCount);
     } catch (err) {
       setClients([]);
+      setTotalCount(0);
       setError(err instanceof Error ? err.message : 'Failed to load clients');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => {
     fetchClients();
@@ -92,9 +100,8 @@ export default function ClientsPage() {
     [clients, appliedSearch]
   );
 
-  const isSearchActive = hasActiveClientFilters(appliedSearch);
   const total = filteredClients.length;
-  const totalAll = clients.length;
+  const totalAll = totalCount;
 
   const handleSearch = () => {
     setAppliedSearch({ ...searchDraft });
@@ -300,15 +307,13 @@ export default function ClientsPage() {
       {/* Table Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-6 border-b border-slate-50 flex items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Show</span>
-            <select className="h-9 border border-slate-200 rounded px-2 text-xs font-bold text-primary">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
-            </select>
-            <span className="text-[11px] font-bold text-slate-500 uppercase">entries</span>
-          </div>
+          <PageSizeSelect
+            pageSize={pageSize}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+          />
         </div>
 
         {error && (
@@ -454,24 +459,12 @@ export default function ClientsPage() {
             </tbody>
           </table>
         </div>
-        <div className="p-4 bg-slate-50/30 flex items-center justify-between border-t border-slate-50">
-          <p className="text-[10px] font-bold text-slate-400 uppercase">
-            {total === 0
-              ? isSearchActive
-                ? `Showing 0 of ${totalAll} entries`
-                : 'Showing 0 entries'
-              : isSearchActive
-                ? `Showing 1 to ${total} of ${totalAll} entries`
-                : `Showing 1 to ${total} of ${total} entries`}
-          </p>
-          {total > 0 && (
-            <div className="flex items-center gap-1">
-              <button className="w-8 h-8 rounded text-[11px] font-bold bg-primary text-white shadow-md">
-                1
-              </button>
-            </div>
-          )}
-        </div>
+        <OrdersPaginationFooter
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalAll}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );
