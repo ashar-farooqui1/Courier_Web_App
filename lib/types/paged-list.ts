@@ -106,9 +106,7 @@ export function buildPagedAdminQuery(options: {
 }): string {
   const params = new URLSearchParams();
 
-  if (options.adminId === null) {
-    params.set("adminId", "NULL");
-  } else if (Number.isInteger(options.adminId) && (options.adminId as number) > 0) {
+  if (Number.isInteger(options.adminId) && (options.adminId as number) > 0) {
     params.set("adminId", String(options.adminId));
   }
 

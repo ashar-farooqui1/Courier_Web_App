@@ -3,7 +3,7 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.stallionex.com.pk";
 
 export const API_ROUTES = {
-  /** Paginated. Super Admin: adminId=NULL. Other staff: adminId={id}. */
+  /** Paginated. Super Admin omits adminId. Other staff: adminId={id}. */
   clients: "/api/Client",
   createClient: "/api/Client/CreateClient",
   onboardClient: "/api/Client/OnboardClient",
@@ -38,7 +38,7 @@ export const API_ROUTES = {
     `/api/Order/GetOrderPickupLocation?pickupLocationId=${pickupLocationId}`,
   orderById: (orderId: number | string) => `/api/Order/GetOrderById?orderId=${orderId}`,
   createOrder: "/api/Order/CreateOrder",
-  /** Paginated. Super Admin: adminId=NULL. Other staff: adminId={id}. */
+  /** Paginated. Super Admin omits adminId. Other staff: adminId={id}. */
   orders: "/api/Order/GetOrders",
   /** Only endpoint that actually filters by client. Used for both the client role and admin per-client views. */
   ordersForClient: (clientId: number | string) =>

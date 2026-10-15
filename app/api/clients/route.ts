@@ -12,7 +12,7 @@ function readPageParam(value: string | null, fallback: number): number {
 
 /**
  * Proxies GET /api/Client?adminId=&pageNum=&pageSize=.
- * Super Admin: adminId=NULL. Other roles: adminId={their id}.
+ * Super Admin omits adminId. Other roles: adminId={their id}.
  */
 export async function GET(request: Request) {
   const ctx = readAppRequestContext(request);
