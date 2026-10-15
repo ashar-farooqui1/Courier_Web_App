@@ -4,6 +4,9 @@ import { getMnpBulkTracking } from '@/lib/api/mnp';
 import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
 import { readAppRequestContext, resolveOrdersClientId } from '@/lib/api/app-request-context';
+import { isStaffRole } from '@/lib/auth/role';
+import { LOOKUP_PAGE_SIZE } from '@/lib/types/paged-list';
+import type { ClientOrder } from '@/lib/types/order';
 import type { MnpTrackingDetail } from '@/lib/types/mnp';
 
 const MNP_COURIER_NAME = 'M&P';
@@ -45,9 +48,26 @@ export async function GET(request: Request) {
   }
 
   try {
-    const orders = scoped.clientId
-      ? await getOrdersByClient(scoped.clientId, token)
-      : await getOrders(token);
+    let orders: ClientOrder[];
+
+    if (scoped.clientId) {
+      orders = await getOrdersByClient(scoped.clientId, token);
+    } else {
+      if (isStaffRole(ctx.role) && ctx.role !== 'super-admin' && ctx.userId < 1) {
+        return NextResponse.json(
+          { message: 'Session not found. Please log in again.' },
+          { status: 403 }
+        );
+      }
+
+      const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
+      const paged = await getOrders(token, {
+        adminId,
+        pageNum: 1,
+        pageSize: LOOKUP_PAGE_SIZE,
+      });
+      orders = paged.items;
+    }
 
     const consignments = Array.from(
       new Set(
