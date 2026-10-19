@@ -83,11 +83,14 @@ export async function getClients(options?: {
   adminId?: number | null;
   pageNum?: number;
   pageSize?: number;
+  search?: string;
 }): Promise<PagedList<Client>> {
+  const search = options?.search?.trim();
   const query = buildPagedAdminQuery({
     adminId: options?.adminId,
     pageNum: options?.pageNum ?? 1,
     pageSize: options?.pageSize ?? DEFAULT_CLIENTS_PAGE_SIZE,
+    extra: search ? { search } : undefined,
   });
   const response = await apiGet<unknown>(`${API_ROUTES.clients}?${query}`);
   return unwrapPagedClients(response);

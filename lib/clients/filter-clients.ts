@@ -48,6 +48,23 @@ export function hasActiveClientFilters(filters: ClientSearchFilters): boolean {
   return Object.values(filters).some((value) => value.trim() !== '');
 }
 
+/**
+ * Builds the backend `search` query from the filter panel.
+ * Non-empty fields are joined with spaces (users typically fill one field).
+ */
+export function buildClientSearchTerm(filters: ClientSearchFilters): string {
+  return [
+    filters.clientId,
+    filters.clientName,
+    filters.pocNumber,
+    filters.clientEmail,
+    filters.contactNumber,
+  ]
+    .map((q) => q.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 /** Each filled filter must match somewhere on the client (AND across filters). */
 export function filterClients(clients: Client[], filters: ClientSearchFilters): Client[] {
   const queries = [

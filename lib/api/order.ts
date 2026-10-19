@@ -363,15 +363,22 @@ async function fetchPagedOrdersFromApi(path: string, token?: string): Promise<Pa
   }
 }
 
-/** GET /api/Order/GetOrders?adminId=&pageNum=&pageSize= */
+/** GET /api/Order/GetOrders?adminId=&pageNum=&pageSize=&search= */
 export async function getOrders(
   token?: string,
-  options?: { adminId?: number | null; pageNum?: number; pageSize?: number }
+  options?: {
+    adminId?: number | null;
+    pageNum?: number;
+    pageSize?: number;
+    search?: string;
+  }
 ): Promise<PagedList<ClientOrder>> {
+  const search = options?.search?.trim();
   const query = buildPagedAdminQuery({
     adminId: options?.adminId,
     pageNum: options?.pageNum ?? 1,
     pageSize: options?.pageSize ?? DEFAULT_ORDERS_PAGE_SIZE,
+    extra: search ? { search } : undefined,
   });
   return fetchPagedOrdersFromApi(`${API_ROUTES.orders}?${query}`, token);
 }

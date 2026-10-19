@@ -15,8 +15,8 @@ import { DEFAULT_CLIENTS_PAGE_SIZE } from '@/lib/types/paged-list';
 import { OrdersPaginationFooter, PageSizeSelect } from '@/components/orders/OrdersPagination';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
+  buildClientSearchTerm,
   emptyClientSearchFilters,
-  filterClients,
   type ClientSearchFilters,
 } from '@/lib/clients/filter-clients';
 
@@ -45,11 +45,23 @@ export default function ClientsPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_CLIENTS_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
 
+  const appliedSearchTerm = useMemo(
+    () => buildClientSearchTerm(appliedSearch),
+    [appliedSearch]
+  );
+
   const fetchClients = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/clients?pageNum=${page}&pageSize=${pageSize}`, {
+      const params = new URLSearchParams({
+        pageNum: String(page),
+        pageSize: String(pageSize),
+      });
+      if (appliedSearchTerm) {
+        params.set('search', appliedSearchTerm);
+      }
+      const response = await fetch(`/api/clients?${params.toString()}`, {
         headers: buildClientsRequestHeaders(),
       });
       if (!response.ok) {
@@ -68,7 +80,7 @@ export default function ClientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize]);
+  }, [appliedSearchTerm, page, pageSize]);
 
   useEffect(() => {
     fetchClients();
@@ -95,19 +107,16 @@ export default function ClientsPage() {
     fetchClients();
   };
 
-  const filteredClients = useMemo(
-    () => filterClients(clients, appliedSearch),
-    [clients, appliedSearch]
-  );
-
-  const total = filteredClients.length;
+  const total = clients.length;
   const totalAll = totalCount;
 
   const handleSearch = () => {
+    setPage(1);
     setAppliedSearch({ ...searchDraft });
   };
 
   const handleClear = () => {
+    setPage(1);
     setSearchDraft(emptyClientSearchFilters);
     setAppliedSearch(emptyClientSearchFilters);
   };
@@ -353,7 +362,11 @@ export default function ClientsPage() {
               ) : totalAll === 0 ? (
                 <tr>
                   <td colSpan={tableHeaders.length + 1} className="p-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
-                    {error ? 'No clients to display' : 'No clients found'}
+                    {error
+                      ? 'No clients to display'
+                      : appliedSearchTerm
+                        ? 'No clients match your search'
+                        : 'No clients found'}
                   </td>
                 </tr>
               ) : total === 0 ? (
@@ -363,7 +376,7 @@ export default function ClientsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredClients.map((client) => (
+                clients.map((client) => (
                   <tr key={client.clientId} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 align-top">
                       <input type="checkbox" className="rounded border-slate-300 text-primary focus:ring-primary" />

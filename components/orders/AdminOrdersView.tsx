@@ -272,6 +272,7 @@ export default function AdminOrdersView() {
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_ORDERS_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
@@ -343,6 +344,9 @@ export default function AdminOrdersView() {
     if (Number.isInteger(clientId) && clientId > 0) {
       params.set("clientId", String(clientId));
     }
+    if (debouncedSearch) {
+      params.set("search", debouncedSearch);
+    }
     const ordersUrl = `/api/orders?${params.toString()}`;
 
     setLoadingOrders(true);
@@ -395,7 +399,14 @@ export default function AdminOrdersView() {
     } finally {
       setLoadingOrders(false);
     }
-  }, [page, pageSize, ready, role, selectedClientId, token, user?.userId]);
+  }, [debouncedSearch, page, pageSize, ready, role, selectedClientId, token, user?.userId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(tableSearch.trim());
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [tableSearch]);
 
   useEffect(() => {
     if (ready) {
@@ -487,7 +498,6 @@ export default function AdminOrdersView() {
       .filter(Boolean);
 
   const filteredOrders = useMemo(() => {
-    const query = tableSearch.trim().toLowerCase();
     const awbQuery = appliedFilters.awbId.trim().toLowerCase();
     const trackingTokens = parseTrackingNumbers(appliedFilters.trackingNumbers);
     const referenceQuery = appliedFilters.referenceId.trim().toLowerCase();
@@ -503,26 +513,7 @@ export default function AdminOrdersView() {
         }
       }
 
-      if (query) {
-        const haystack = [
-          order.awbNo,
-          order.clientName,
-          order.customerName,
-          order.customerPhone,
-          order.customerReference,
-          order.productName,
-          order.serviceName,
-          order.status,
-          order.riderName,
-          order.destinationCity,
-          order.originCity,
-          order.warehouse,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        if (!haystack.includes(query)) return false;
-      }
+      // Toolbar SEARCH is handled server-side via ?search= (or BFF filter for client-scoped lists).
 
       if (awbQuery && !order.awbNo?.toLowerCase().includes(awbQuery)) return false;
       if (trackingTokens.length > 0 && !trackingTokens.includes(order.awbNo?.trim().toLowerCase() ?? ""))
@@ -545,11 +536,11 @@ export default function AdminOrdersView() {
 
       return true;
     });
-  }, [orders, tableSearch, appliedFilters, selectedClient]);
+  }, [orders, appliedFilters, selectedClient]);
 
   useEffect(() => {
     setPage(1);
-  }, [appliedFilters, selectedClientId, pageSize]);
+  }, [appliedFilters, selectedClientId, pageSize, debouncedSearch]);
 
   const currentPage = page;
   const pagedOrders = filteredOrders;

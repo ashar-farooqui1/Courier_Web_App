@@ -8,6 +8,7 @@ import {
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
 import { isStaffRole } from '@/lib/auth/role';
+import { filterOrdersBySearch } from '@/lib/orders/order-search';
 import { DEFAULT_ORDERS_PAGE_SIZE, paginateItems } from '@/lib/types/paged-list';
 import type { CreateOrderPayload } from '@/lib/types/order';
 
@@ -43,7 +44,7 @@ function readPageParam(value: string | null, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize= (optional ?clientId=) */
+/** Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize=&search= (optional ?clientId=) */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
 
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
   const pageSizeParam = searchParams.get('pageSize');
   const pageNum = readPageParam(pageNumParam, 1);
   const pageSize = readPageParam(pageSizeParam, DEFAULT_ORDERS_PAGE_SIZE);
+  const search = searchParams.get('search')?.trim() || undefined;
 
   if (
     clientIdParam &&
@@ -75,7 +77,11 @@ export async function GET(request: Request) {
 
   try {
     if (scoped.clientId) {
-      const orders = await getOrdersByClient(scoped.clientId, token);
+      // GetOrdersByClient has no search param — filter in this BFF layer.
+      const orders = filterOrdersBySearch(
+        await getOrdersByClient(scoped.clientId, token),
+        search ?? ''
+      );
       if (!pageNumParam && !pageSizeParam) {
         return NextResponse.json(
           paginateItems(orders, 1, Math.max(orders.length, DEFAULT_ORDERS_PAGE_SIZE))
@@ -92,7 +98,7 @@ export async function GET(request: Request) {
     }
 
     const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
-    const orders = await getOrders(token, { adminId, pageNum, pageSize });
+    const orders = await getOrders(token, { adminId, pageNum, pageSize, search });
     return NextResponse.json(orders);
   } catch (error) {
     if (error instanceof ApiError) {

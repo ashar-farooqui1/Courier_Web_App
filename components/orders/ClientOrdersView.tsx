@@ -219,6 +219,7 @@ export default function ClientOrdersView() {
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [tableSearch, setTableSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const emptyOrderFilters = {
@@ -256,7 +257,11 @@ export default function ClientOrdersView() {
     setOrdersError(null);
 
     try {
-      const response = await fetch(`/api/orders?clientId=${clientId}`, {
+      const params = new URLSearchParams({ clientId: String(clientId) });
+      if (debouncedSearch) {
+        params.set("search", debouncedSearch);
+      }
+      const response = await fetch(`/api/orders?${params.toString()}`, {
         headers: buildAppAuthHeaders(token, role, clientId),
       });
 
@@ -295,7 +300,14 @@ export default function ClientOrdersView() {
     } finally {
       setLoadingOrders(false);
     }
-  }, [clientId, ready, role, token]);
+  }, [clientId, debouncedSearch, ready, role, token]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(tableSearch.trim());
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [tableSearch]);
 
   useEffect(() => {
     loadOrders();
@@ -334,30 +346,11 @@ export default function ClientOrdersView() {
   };
 
   const filteredOrders = useMemo(() => {
-    const query = tableSearch.trim().toLowerCase();
     const awbQuery = appliedFilters.awbId.trim().toLowerCase();
     const referenceQuery = appliedFilters.customerReference.trim().toLowerCase();
 
     return orders.filter((order) => {
-      if (query) {
-        const haystack = [
-          order.awbNo,
-          order.clientName,
-          order.customerName,
-          order.customerPhone,
-          order.customerReference,
-          order.productName,
-          order.serviceName,
-          order.status,
-          order.destinationCity,
-          order.originCity,
-          order.warehouse,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        if (!haystack.includes(query)) return false;
-      }
+      // Toolbar SEARCH is applied via ?search= on /api/orders (BFF filters GetOrdersByClient).
 
       if (awbQuery && !order.awbNo?.toLowerCase().includes(awbQuery)) return false;
       if (referenceQuery && !order.customerReference?.toLowerCase().includes(referenceQuery)) return false;
@@ -375,7 +368,7 @@ export default function ClientOrdersView() {
 
       return true;
     });
-  }, [orders, tableSearch, appliedFilters]);
+  }, [orders, appliedFilters]);
 
   const handleOrderCreated = (message: string) => {
     setSuccessMessage(message);
@@ -384,7 +377,7 @@ export default function ClientOrdersView() {
 
   useEffect(() => {
     setPage(1);
-  }, [tableSearch, appliedFilters, orders]);
+  }, [debouncedSearch, appliedFilters, orders]);
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const currentPage = Math.min(page, totalPages);

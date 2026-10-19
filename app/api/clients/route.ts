@@ -11,7 +11,7 @@ function readPageParam(value: string | null, fallback: number): number {
 }
 
 /**
- * Proxies GET /api/Client?adminId=&pageNum=&pageSize=.
+ * Proxies GET /api/Client?adminId=&pageNum=&pageSize=&search=.
  * Super Admin omits adminId. Other roles: adminId={their id}.
  */
 export async function GET(request: Request) {
@@ -27,10 +27,11 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const pageNum = readPageParam(searchParams.get('pageNum'), 1);
   const pageSize = readPageParam(searchParams.get('pageSize'), DEFAULT_CLIENTS_PAGE_SIZE);
+  const search = searchParams.get('search')?.trim() || undefined;
   const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
 
   try {
-    const clients = await getClients({ adminId, pageNum, pageSize });
+    const clients = await getClients({ adminId, pageNum, pageSize, search });
     return NextResponse.json(clients);
   } catch (error) {
     if (error instanceof ApiError) {
