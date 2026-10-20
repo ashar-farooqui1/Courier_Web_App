@@ -39,7 +39,8 @@ import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapPagedOrders } from "@/lib/api/order";
 import { parseContentDispositionFilename } from "@/lib/format";
 import { exportOrdersToExcel } from "@/lib/orders/order-export";
-import { ORDER_STATUS_OPTIONS, isOrderStatusApiValue, normalizeOrderStatusValue } from "@/lib/orders/order-status-options";
+import { ORDER_STATUS_OPTIONS, isOrderStatusApiValue } from "@/lib/orders/order-status-options";
+import { parseTrackingNumbers } from "@/lib/orders/order-filters";
 import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
 import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
 import type { Client } from "@/lib/types/client";
@@ -347,6 +348,21 @@ export default function AdminOrdersView() {
     if (debouncedSearch) {
       params.set("search", debouncedSearch);
     }
+    // Search-panel filters run in the BFF across all orders, not just the current page.
+    const filterParams: Record<string, string> = {
+      awbId: appliedFilters.awbId.trim(),
+      referenceId: appliedFilters.referenceId.trim(),
+      trackingNumbers: parseTrackingNumbers(appliedFilters.trackingNumbers).join(","),
+      city: appliedFilters.city,
+      rider: appliedFilters.rider,
+      status: appliedFilters.status.join(","),
+      dateTo: appliedFilters.dateTo,
+      assignDateFrom: appliedFilters.assignDateFrom,
+      assignDateTo: appliedFilters.assignDateTo,
+    };
+    for (const [key, value] of Object.entries(filterParams)) {
+      if (value) params.set(key, value);
+    }
     const ordersUrl = `/api/orders?${params.toString()}`;
 
     setLoadingOrders(true);
@@ -399,7 +415,7 @@ export default function AdminOrdersView() {
     } finally {
       setLoadingOrders(false);
     }
-  }, [debouncedSearch, page, pageSize, ready, role, selectedClientId, token, user?.userId]);
+  }, [appliedFilters, debouncedSearch, page, pageSize, ready, role, selectedClientId, token, user?.userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -460,47 +476,32 @@ export default function AdminOrdersView() {
   };
 
   const handleSearch = () => {
+    setPage(1);
     setAppliedFilters(filterDraft);
   };
 
   const handleClearFilters = () => {
+    setPage(1);
     setFilterDraft(emptyOrderFilters);
     setAppliedFilters(emptyOrderFilters);
     setSelectedClientId("");
   };
 
+  // Set by the tracking-number search; once the filtered orders arrive, they get selected.
+  const selectTrackingMatchesRef = useRef(false);
+
   const handleTrackingNumberSearch = () => {
+    const hasTokens = parseTrackingNumbers(filterDraft.trackingNumbers).length > 0;
+    if (filterDraft === appliedFilters) {
+      // Same search again: no refetch happens, so select the already-loaded matches now.
+      if (hasTokens) setSelectedOrderIds(new Set(filteredOrders.map((order) => order.orderId)));
+      return;
+    }
+    selectTrackingMatchesRef.current = hasTokens;
     handleSearch();
-
-    const tokens = parseTrackingNumbers(filterDraft.trackingNumbers);
-    if (tokens.length === 0) return;
-
-    const matchedIds = orders
-      .filter((order) => tokens.includes(order.awbNo?.trim().toLowerCase() ?? ""))
-      .map((order) => order.orderId);
-    setSelectedOrderIds(new Set(matchedIds));
   };
-
-  const isWithinDateRange = (orderDate: string, from: string, to: string) => {
-    if (!from && !to) return true;
-    const parsed = new Date(orderDate);
-    if (Number.isNaN(parsed.getTime())) return false;
-    const day = parsed.toISOString().slice(0, 10);
-    if (from && day < from) return false;
-    if (to && day > to) return false;
-    return true;
-  };
-
-  const parseTrackingNumbers = (raw: string): string[] =>
-    raw
-      .split(/[\s,]+/)
-      .map((token) => token.trim().toLowerCase())
-      .filter(Boolean);
 
   const filteredOrders = useMemo(() => {
-    const awbQuery = appliedFilters.awbId.trim().toLowerCase();
-    const trackingTokens = parseTrackingNumbers(appliedFilters.trackingNumbers);
-    const referenceQuery = appliedFilters.referenceId.trim().toLowerCase();
     const selectedClientName = selectedClient ? clientLabel(selectedClient).trim().toLowerCase() : "";
 
     return orders.filter((order) => {
@@ -513,30 +514,16 @@ export default function AdminOrdersView() {
         }
       }
 
-      // Toolbar SEARCH is handled server-side via ?search= (or BFF filter for client-scoped lists).
-
-      if (awbQuery && !order.awbNo?.toLowerCase().includes(awbQuery)) return false;
-      if (trackingTokens.length > 0 && !trackingTokens.includes(order.awbNo?.trim().toLowerCase() ?? ""))
-        return false;
-      if (referenceQuery && !order.customerReference?.toLowerCase().includes(referenceQuery)) return false;
-      if (
-        appliedFilters.city &&
-        order.destinationCity !== appliedFilters.city &&
-        order.originCity !== appliedFilters.city
-      )
-        return false;
-      if (appliedFilters.rider && order.riderName !== appliedFilters.rider) return false;
-      if (appliedFilters.status.length > 0) {
-        const normalizedStatus = normalizeOrderStatusValue(order.status);
-        if (!normalizedStatus || !appliedFilters.status.includes(normalizedStatus)) return false;
-      }
-      if (!isWithinDateRange(order.orderDate, "", appliedFilters.dateTo)) return false;
-      if (!isWithinDateRange(order.orderDate, appliedFilters.assignDateFrom, appliedFilters.assignDateTo))
-        return false;
-
+      // Toolbar SEARCH and the search-panel filters are applied server-side (see loadOrders).
       return true;
     });
-  }, [orders, appliedFilters, selectedClient]);
+  }, [orders, selectedClient]);
+
+  useEffect(() => {
+    if (loadingOrders || !selectTrackingMatchesRef.current) return;
+    selectTrackingMatchesRef.current = false;
+    setSelectedOrderIds(new Set(filteredOrders.map((order) => order.orderId)));
+  }, [filteredOrders, loadingOrders]);
 
   useEffect(() => {
     setPage(1);

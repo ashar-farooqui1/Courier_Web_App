@@ -9,8 +9,30 @@ import {
 } from '@/lib/api/app-request-context';
 import { isStaffRole } from '@/lib/auth/role';
 import { filterOrdersBySearch } from '@/lib/orders/order-search';
-import { DEFAULT_ORDERS_PAGE_SIZE, paginateItems } from '@/lib/types/paged-list';
-import type { CreateOrderPayload } from '@/lib/types/order';
+import {
+  filterOrders,
+  hasOrderListFilters,
+  readOrderListFilters,
+} from '@/lib/orders/order-filters';
+import { DEFAULT_ORDERS_PAGE_SIZE, LOOKUP_PAGE_SIZE, paginateItems } from '@/lib/types/paged-list';
+import type { ClientOrder, CreateOrderPayload } from '@/lib/types/order';
+
+const MAX_FILTER_SCAN_PAGES = 200;
+
+/** Walks every backend page so search-panel filters cover all orders, not just one page. */
+async function getAllOrders(
+  token: string,
+  adminId: number | null,
+  search: string | undefined
+): Promise<ClientOrder[]> {
+  const all: ClientOrder[] = [];
+  for (let pageNum = 1; pageNum <= MAX_FILTER_SCAN_PAGES; pageNum++) {
+    const page = await getOrders(token, { adminId, pageNum, pageSize: LOOKUP_PAGE_SIZE, search });
+    all.push(...page.items);
+    if (page.items.length === 0 || pageNum >= page.totalPages || all.length >= page.totalCount) break;
+  }
+  return all;
+}
 
 function readString(value: unknown): string {
   if (value == null) return '';
@@ -44,7 +66,11 @@ function readPageParam(value: string | null, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize=&search= (optional ?clientId=) */
+/**
+ * Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize=&search= (optional ?clientId=).
+ * Search-panel filters (awbId, referenceId, trackingNumbers, city, rider, status, dateTo,
+ * assignDateFrom, assignDateTo) are applied here across all orders, then paginated.
+ */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
 
@@ -60,6 +86,8 @@ export async function GET(request: Request) {
   const pageNum = readPageParam(pageNumParam, 1);
   const pageSize = readPageParam(pageSizeParam, DEFAULT_ORDERS_PAGE_SIZE);
   const search = searchParams.get('search')?.trim() || undefined;
+  const filters = readOrderListFilters(searchParams);
+  const filtersActive = hasOrderListFilters(filters);
 
   if (
     clientIdParam &&
@@ -78,9 +106,9 @@ export async function GET(request: Request) {
   try {
     if (scoped.clientId) {
       // GetOrdersByClient has no search param — filter in this BFF layer.
-      const orders = filterOrdersBySearch(
-        await getOrdersByClient(scoped.clientId, token),
-        search ?? ''
+      const orders = filterOrders(
+        filterOrdersBySearch(await getOrdersByClient(scoped.clientId, token), search ?? ''),
+        filters
       );
       if (!pageNumParam && !pageSizeParam) {
         return NextResponse.json(
@@ -98,8 +126,13 @@ export async function GET(request: Request) {
     }
 
     const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
-    const orders = await getOrders(token, { adminId, pageNum, pageSize, search });
-    return NextResponse.json(orders);
+    if (!filtersActive) {
+      const orders = await getOrders(token, { adminId, pageNum, pageSize, search });
+      return NextResponse.json(orders);
+    }
+
+    const orders = filterOrders(await getAllOrders(token, adminId, search), filters);
+    return NextResponse.json(paginateItems(orders, pageNum, pageSize));
   } catch (error) {
     if (error instanceof ApiError) {
       return NextResponse.json(
