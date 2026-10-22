@@ -14,6 +14,7 @@ import type { Client } from "@/lib/types/client";
 import type { PickupLocation } from "@/lib/types/pickup-location";
 import type { Service } from "@/lib/types/service";
 import { FieldError, fieldErrorInputClass } from "@/components/ui/FieldError";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   FIX_FIELDS_MESSAGE,
   clearFieldError,
@@ -561,31 +562,24 @@ export function AddClientOrderDialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {isAdmin && (
               <FormField label="Client" required error={fieldErrors.clientId}>
-                <div className="relative">
-                  <select
-                    value={selectedClientId}
-                    onChange={(e) => {
-                      setSelectedClientId(e.target.value);
-                      setFieldErrors((prev) => clearFieldError(prev, "clientId"));
-                    }}
-                    disabled={loadingClients || submitting}
-                    className={cn(inputClassFor("clientId"), "appearance-none cursor-pointer")}
-                    required
-                  >
-                    <option value="">
-                      {loadingClients ? "Loading clients..." : "--Select Client--"}
-                    </option>
-                    {clients.map((client) => (
-                      <option key={client.clientId} value={client.clientId}>
-                        {clientLabel(client)}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                    size={14}
-                  />
-                </div>
+                <SearchableSelect
+                  value={selectedClientId}
+                  onChange={(next) => {
+                    setSelectedClientId(next);
+                    setFieldErrors((prev) => clearFieldError(prev, "clientId"));
+                  }}
+                  disabled={loadingClients || submitting}
+                  placeholder={loadingClients ? "Loading clients..." : "--Select Client--"}
+                  emptyMessage="No matching clients"
+                  className={cn(inputClassFor("clientId"))}
+                  options={clients.map((client) => ({
+                    value: String(client.clientId),
+                    label: clientLabel(client),
+                    keywords: [client.clientName, client.brandName, client.clientCode, String(client.clientId)]
+                      .filter(Boolean)
+                      .join(" "),
+                  }))}
+                />
               </FormField>
             )}
             <FormField label="Pickup Location" required error={fieldErrors.pickupLocationId}>
@@ -701,28 +695,19 @@ export function AddClientOrderDialog({
               />
             </FormField>
             <FormField label="Destination City" required error={fieldErrors.destinationCityId}>
-              <div className="relative">
-                <select
-                  value={form.destinationCityId}
-                  onChange={(e) => updateField("destinationCityId", e.target.value)}
-                  disabled={loadingCities || submitting}
-                  className={cn(inputClassFor("destinationCityId"), "appearance-none cursor-pointer")}
-                  required
-                >
-                  <option value="">
-                    {loadingCities ? "Loading cities..." : "--Select City--"}
-                  </option>
-                  {cities.map((city) => (
-                    <option key={city.cityId} value={city.cityId}>
-                      {city.cityName}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  size={14}
-                />
-              </div>
+              <SearchableSelect
+                value={form.destinationCityId}
+                onChange={(next) => updateField("destinationCityId", next)}
+                disabled={loadingCities || submitting}
+                placeholder={loadingCities ? "Loading cities..." : "--Select City--"}
+                emptyMessage="No matching cities"
+                className={cn(inputClassFor("destinationCityId"))}
+                options={cities.map((city) => ({
+                  value: String(city.cityId),
+                  label: city.cityName,
+                  keywords: [city.shortForm, city.province, city.zoneName].filter(Boolean).join(" "),
+                }))}
+              />
             </FormField>
             <FormField label="Area" error={fieldErrors.area}>
               <input
