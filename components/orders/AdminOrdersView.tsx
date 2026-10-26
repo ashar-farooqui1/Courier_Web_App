@@ -244,6 +244,12 @@ const StatusMultiSelectFilter = ({
   );
 };
 
+function orderMatchesClientName(order: ClientOrder, clientName: string): boolean {
+  if (!clientName) return true;
+  const orderClientName = order.clientName?.trim().toLowerCase() ?? "";
+  return orderClientName === clientName || orderClientName.includes(clientName);
+}
+
 export default function AdminOrdersView() {
   const { token, ready, role, user } = useAuthSession();
   const router = useRouter();
@@ -298,6 +304,10 @@ export default function AdminOrdersView() {
   const [deletingOrders, setDeletingOrders] = useState(false);
   const [creatingLoadsheet, setCreatingLoadsheet] = useState(false);
   const [exportingOrders, setExportingOrders] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  // Every order loaded so far (current pages + Select All), so actions like export can
+  // work on selections that span pages.
+  const knownOrdersRef = useRef<Map<number, ClientOrder>>(new Map());
   const [actionError, setActionError] = useState<string | null>(null);
 
   const toggleModal = (key: string, val: boolean) => {
@@ -327,28 +337,16 @@ export default function AdminOrdersView() {
     }
   }, []);
 
-  const loadOrders = useCallback(async () => {
-    if (!ready) return;
-
-    if (!token) {
-      setOrders([]);
-      setOrdersError("Authentication required. Please log in again.");
-      setLoadingOrders(false);
-      return;
-    }
-
+  // Client, toolbar search and search-panel filters; the BFF applies them across all orders.
+  const ordersQuery = useMemo(() => {
+    const params = new URLSearchParams();
     const clientId = Number(selectedClientId);
-    const params = new URLSearchParams({
-      pageNum: String(page),
-      pageSize: String(pageSize),
-    });
     if (Number.isInteger(clientId) && clientId > 0) {
       params.set("clientId", String(clientId));
     }
     if (debouncedSearch) {
       params.set("search", debouncedSearch);
     }
-    // Search-panel filters run in the BFF across all orders, not just the current page.
     const filterParams: Record<string, string> = {
       awbId: appliedFilters.awbId.trim(),
       referenceId: appliedFilters.referenceId.trim(),
@@ -363,6 +361,23 @@ export default function AdminOrdersView() {
     for (const [key, value] of Object.entries(filterParams)) {
       if (value) params.set(key, value);
     }
+    return params.toString();
+  }, [appliedFilters, debouncedSearch, selectedClientId]);
+
+  const loadOrders = useCallback(async () => {
+    if (!ready) return;
+
+    if (!token) {
+      setOrders([]);
+      setOrdersError("Authentication required. Please log in again.");
+      setLoadingOrders(false);
+      return;
+    }
+
+    const clientId = Number(selectedClientId);
+    const params = new URLSearchParams(ordersQuery);
+    params.set("pageNum", String(page));
+    params.set("pageSize", String(pageSize));
     const ordersUrl = `/api/orders?${params.toString()}`;
 
     setLoadingOrders(true);
@@ -415,7 +430,7 @@ export default function AdminOrdersView() {
     } finally {
       setLoadingOrders(false);
     }
-  }, [appliedFilters, debouncedSearch, page, pageSize, ready, role, selectedClientId, token, user?.userId]);
+  }, [ordersQuery, page, pageSize, ready, role, selectedClientId, token, user?.userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -501,23 +516,18 @@ export default function AdminOrdersView() {
     handleSearch();
   };
 
-  const filteredOrders = useMemo(() => {
-    const selectedClientName = selectedClient ? clientLabel(selectedClient).trim().toLowerCase() : "";
+  // Safety net: the API's ?clientId= filter isn't always honored by the
+  // backend, so also match on client name client-side.
+  const selectedClientName = selectedClient ? clientLabel(selectedClient).trim().toLowerCase() : "";
+  const matchesSelectedClient = (order: ClientOrder) =>
+    orderMatchesClientName(order, selectedClientName);
 
-    return orders.filter((order) => {
-      // Safety net: the API's ?clientId= filter isn't always honored by the
-      // backend, so also match on client name client-side.
-      if (selectedClientName) {
-        const orderClientName = order.clientName?.trim().toLowerCase() ?? "";
-        if (orderClientName !== selectedClientName && !orderClientName.includes(selectedClientName)) {
-          return false;
-        }
-      }
+  // Toolbar SEARCH and the search-panel filters are applied server-side (see ordersQuery).
+  const filteredOrders = orders.filter(matchesSelectedClient);
 
-      // Toolbar SEARCH and the search-panel filters are applied server-side (see loadOrders).
-      return true;
-    });
-  }, [orders, selectedClient]);
+  useEffect(() => {
+    orders.forEach((order) => knownOrdersRef.current.set(order.orderId, order));
+  }, [orders]);
 
   useEffect(() => {
     if (loadingOrders || !selectTrackingMatchesRef.current) return;
@@ -532,10 +542,6 @@ export default function AdminOrdersView() {
   const currentPage = page;
   const pagedOrders = filteredOrders;
 
-  const matchedOrderIds = useMemo(
-    () => filteredOrders.map((order) => order.orderId),
-    [filteredOrders]
-  );
   const pageOrderIds = useMemo(() => pagedOrders.map((order) => order.orderId), [pagedOrders]);
 
   const allPageSelected =
@@ -554,12 +560,41 @@ export default function AdminOrdersView() {
     });
   };
 
-  const handleSelectAllVisible = () => {
-    setSelectedOrderIds((prev) => {
-      const next = new Set(prev);
-      matchedOrderIds.forEach((orderId) => next.add(orderId));
-      return next;
-    });
+  // Selects every order matching the current client/search/filters across all pages.
+  const handleSelectAll = async () => {
+    if (!token) {
+      setActionError("Authentication required. Please log in again.");
+      return;
+    }
+
+    setSelectingAll(true);
+    setActionError(null);
+
+    try {
+      const params = new URLSearchParams(ordersQuery);
+      params.set("all", "true");
+      const response = await fetch(`/api/orders?${params.toString()}`, {
+        headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(parseApiErrorMessage(payload, `Failed to load orders (${response.status})`));
+      }
+
+      const allOrders = unwrapPagedOrders(payload).items.filter(matchesSelectedClient);
+      allOrders.forEach((order) => {
+        // Keep page copies — they may carry the M&P tracking status.
+        if (!knownOrdersRef.current.has(order.orderId)) {
+          knownOrdersRef.current.set(order.orderId, order);
+        }
+      });
+      setSelectedOrderIds(new Set(allOrders.map((order) => order.orderId)));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Failed to select all orders");
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const handleDeselectAll = () => {
@@ -698,7 +733,9 @@ export default function AdminOrdersView() {
   };
 
   const handleExportOrders = async () => {
-    const selectedOrders = orders.filter((order) => selectedOrderIds.has(order.orderId));
+    const selectedOrders = Array.from(selectedOrderIds)
+      .map((orderId) => knownOrdersRef.current.get(orderId))
+      .filter((order): order is ClientOrder => order !== undefined);
     if (selectedOrders.length === 0) {
       setActionError("Please select at least one order to export.");
       return;
@@ -1319,11 +1356,11 @@ export default function AdminOrdersView() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={handleSelectAllVisible}
-                disabled={matchedOrderIds.length === 0}
+                onClick={handleSelectAll}
+                disabled={selectingAll || loadingOrders || totalCount === 0}
                 className="h-8 px-4 bg-primary text-white text-[10px] font-bold rounded uppercase hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Select All
+                {selectingAll ? "Selecting..." : "Select All"}
               </button>
               <button
                 type="button"

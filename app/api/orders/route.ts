@@ -88,6 +88,8 @@ export async function GET(request: Request) {
   const search = searchParams.get('search')?.trim() || undefined;
   const filters = readOrderListFilters(searchParams);
   const filtersActive = hasOrderListFilters(filters);
+  // ?all=true returns every matching order in one page (used by "Select All").
+  const all = searchParams.get('all') === 'true';
 
   if (
     clientIdParam &&
@@ -110,7 +112,7 @@ export async function GET(request: Request) {
         filterOrdersBySearch(await getOrdersByClient(scoped.clientId, token), search ?? ''),
         filters
       );
-      if (!pageNumParam && !pageSizeParam) {
+      if (all || (!pageNumParam && !pageSizeParam)) {
         return NextResponse.json(
           paginateItems(orders, 1, Math.max(orders.length, DEFAULT_ORDERS_PAGE_SIZE))
         );
@@ -126,12 +128,15 @@ export async function GET(request: Request) {
     }
 
     const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
-    if (!filtersActive) {
+    if (!filtersActive && !all) {
       const orders = await getOrders(token, { adminId, pageNum, pageSize, search });
       return NextResponse.json(orders);
     }
 
     const orders = filterOrders(await getAllOrders(token, adminId, search), filters);
+    if (all) {
+      return NextResponse.json(paginateItems(orders, 1, Math.max(orders.length, 1)));
+    }
     return NextResponse.json(paginateItems(orders, pageNum, pageSize));
   } catch (error) {
     if (error instanceof ApiError) {
