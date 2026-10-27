@@ -1,11 +1,21 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { FileOutput, FileSpreadsheet, Plus, Search, Edit2, Trash2 } from "lucide-react";
+import {
+  FileOutput,
+  FileSpreadsheet,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Search,
+  Edit2,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CreateCityDialog } from "@/components/cities/CreateCityDialog";
 import { EditCityDialog } from "@/components/cities/EditCityDialog";
 import { ImportCitiesDialog } from "@/components/cities/ImportCitiesDialog";
+import { MpLocationMappingsPanel } from "@/components/cities/MpLocationMappingsPanel";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import type { City } from "@/lib/types/city";
@@ -22,7 +32,36 @@ const TABLE_HEADERS = [
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
+type CitiesTab = "cities" | "mp-locations";
+
+const CitiesPageTab = ({
+  icon: Icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ComponentType<{ size?: number }>;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      "flex items-center gap-2 px-5 py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all rounded-md",
+      active
+        ? "bg-primary text-white shadow-lg shadow-primary/20"
+        : "text-slate-500 hover:bg-slate-50 hover:text-primary"
+    )}
+  >
+    <Icon size={14} />
+    {label}
+  </button>
+);
+
 export default function CitiesPage() {
+  const [activeTab, setActiveTab] = useState<CitiesTab>("cities");
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,8 +98,9 @@ export default function CitiesPage() {
   }, []);
 
   useEffect(() => {
+    if (activeTab !== "cities") return;
     fetchCities();
-  }, [fetchCities]);
+  }, [activeTab, fetchCities]);
 
   useEffect(() => {
     if (!successMessage) return;
@@ -184,6 +224,28 @@ export default function CitiesPage() {
 
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Cities</h1>
+        <div className="flex items-center gap-2 p-1 bg-white rounded-lg border border-slate-100 shadow-sm">
+          <CitiesPageTab
+            icon={MapPin}
+            label="Cities"
+            active={activeTab === "cities"}
+            onClick={() => setActiveTab("cities")}
+          />
+          <CitiesPageTab
+            icon={RefreshCw}
+            label="M&P Locations"
+            active={activeTab === "mp-locations"}
+            onClick={() => setActiveTab("mp-locations")}
+          />
+        </div>
+      </div>
+
+      {activeTab === "mp-locations" ? <MpLocationMappingsPanel /> : null}
+
+      {activeTab === "cities" ? (
+        <>
       <CreateCityDialog
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
@@ -222,8 +284,7 @@ export default function CitiesPage() {
           {successMessage}
         </div>
       ) : null}
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Cities</h1>
+      <div className="flex items-center justify-end gap-4">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -448,6 +509,8 @@ export default function CitiesPage() {
           </div>
         </div>
       </div>
+        </>
+      ) : null}
     </div>
   );
 }

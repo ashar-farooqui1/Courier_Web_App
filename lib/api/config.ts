@@ -127,6 +127,12 @@ export const API_ROUTES = {
   searchCities: (keyword: string) =>
     `/api/Admin/SearchCities?keyword=${encodeURIComponent(keyword)}`,
   bulkUploadCities: "/api/Admin/BulkUploadCities",
+  courierLocationMappings: (courierCode: string) =>
+    `/api/Admin/GetCourierLocationMappings?courierCode=${encodeURIComponent(courierCode)}`,
+  syncCourierLocations: "/api/Admin/SyncCourierLocations",
+  courierLocations: (courierCode: string) =>
+    `/api/Admin/GetCourierLocations?courierCode=${encodeURIComponent(courierCode)}`,
+  setCourierLocationMapping: "/api/Admin/SetCourierLocationMapping",
   zones: "/api/Admin/GetAllZones",
   services: "/api/Admin/GellAllService",
   couriers: "/api/Admin/GetAllCouriers",
