@@ -6,7 +6,11 @@ import { useAuthSession } from "@/hooks/useAuthRole";
 import { buildAppAuthHeaders } from "@/lib/api/app-request-context";
 import { parseApiErrorMessage } from "@/lib/api/errors";
 import { unwrapOrdersList } from "@/lib/api/order";
-import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
+import {
+  applyMnpTrackingStatus,
+  buildMnpStatusMap,
+  collectMnpTrackingNumbers,
+} from "@/lib/orders/mnp-status";
 import ShipmentFinancialSummary from "@/components/dashboard/ShipmentFinancialSummary";
 import DashboardHeroBanner from "@/components/dashboard/DashboardHeroBanner";
 import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
@@ -50,13 +54,19 @@ export default function ClientDashboardView() {
       }
 
       const fetchedOrders = unwrapOrdersList(payload);
+      const consignments = collectMnpTrackingNumbers(fetchedOrders);
 
-      if (!fetchedOrders.some(isMnpOrder)) {
+      if (consignments.length === 0) {
         setOrders(fetchedOrders);
       } else {
         try {
-          const mnpResponse = await fetch(`/api/orders/mnp-tracking?clientId=${clientId}`, {
-            headers: buildAppAuthHeaders(token, role, clientId),
+          const mnpResponse = await fetch("/api/orders/mnp-tracking", {
+            method: "POST",
+            headers: {
+              ...buildAppAuthHeaders(token, role, clientId),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ consignments }),
           });
           const mnpPayload = (await mnpResponse.json().catch(() => null)) as {
             tracking_Details?: MnpTrackingDetail[];

@@ -7,6 +7,20 @@ export function isMnpOrder(order: Pick<ClientOrder, "courierName">): boolean {
   return order.courierName.trim().toUpperCase() === MNP_COURIER_NAME;
 }
 
+/** Unique non-empty M&P courier tracking numbers from the given orders. */
+export function collectMnpTrackingNumbers(
+  orders: Array<Pick<ClientOrder, "courierName" | "courierTrackingNo">>
+): string[] {
+  return Array.from(
+    new Set(
+      orders
+        .filter(isMnpOrder)
+        .map((order) => order.courierTrackingNo.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 function parseMnpTransactionTime(value: string): number {
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? 0 : time;

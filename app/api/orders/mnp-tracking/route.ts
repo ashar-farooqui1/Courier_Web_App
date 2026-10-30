@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getOrders, getOrdersByClient } from '@/lib/api/order';
 import { getMnpBulkTracking } from '@/lib/api/mnp';
 import { ApiError } from '@/lib/api/http';
 import { parseApiErrorMessage } from '@/lib/api/errors';
-import { readAppRequestContext, resolveOrdersClientId } from '@/lib/api/app-request-context';
-import { isStaffRole } from '@/lib/auth/role';
-import { LOOKUP_PAGE_SIZE } from '@/lib/types/paged-list';
-import type { ClientOrder } from '@/lib/types/order';
 import type { MnpTrackingDetail } from '@/lib/types/mnp';
 
-const MNP_COURIER_NAME = 'M&P';
+/** M&P bulk tracking can drop or truncate large batches — keep requests small. */
+const MNP_CONSIGNMENT_CHUNK_SIZE = 50;
 
 function getBearerToken(request: Request): string | undefined {
   const authHeader = request.headers.get('Authorization');
@@ -18,72 +14,57 @@ function getBearerToken(request: Request): string | undefined {
   return token || undefined;
 }
 
+function normalizeConsignments(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(
+    new Set(
+      raw
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 /**
- * Fetches this app's orders, keeps only those booked via the M&P third-party
- * courier, and looks up their live status from M&P's Bulk_Consignment_Tracking_New API.
+ * Looks up live M&P tracking status for the given consignment numbers.
+ *
+ * POST body: { consignments: string[] }
+ *
+ * Callers must pass the tracking numbers for the orders currently on screen
+ * (or the full list, chunked here). Do not rely on re-fetching page 1 of orders —
+ * that left later pages with empty Courier Tracking Status.
  */
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   const token = getBearerToken(request);
 
   if (!token) {
     return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const clientIdParam = searchParams.get('clientId');
-  const clientId = clientIdParam ? Number(clientIdParam) : undefined;
-
-  if (
-    clientIdParam &&
-    (clientId === undefined || !Number.isInteger(clientId) || clientId < 1)
-  ) {
-    return NextResponse.json({ message: 'Invalid client ID' }, { status: 400 });
-  }
-
-  const ctx = readAppRequestContext(request);
-  const scoped = resolveOrdersClientId(ctx, clientId);
-
-  if (scoped.error) {
-    return NextResponse.json({ message: scoped.error }, { status: scoped.status ?? 403 });
-  }
-
   try {
-    let orders: ClientOrder[];
-
-    if (scoped.clientId) {
-      orders = await getOrdersByClient(scoped.clientId, token);
-    } else {
-      if (isStaffRole(ctx.role) && ctx.role !== 'super-admin' && ctx.userId < 1) {
-        return NextResponse.json(
-          { message: 'Session not found. Please log in again.' },
-          { status: 403 }
-        );
-      }
-
-      const adminId = ctx.role === 'super-admin' ? null : ctx.userId;
-      const paged = await getOrders(token, {
-        adminId,
-        pageNum: 1,
-        pageSize: LOOKUP_PAGE_SIZE,
-      });
-      orders = paged.items;
-    }
-
-    const consignments = Array.from(
-      new Set(
-        orders
-          .filter((order) => order.courierName.trim().toUpperCase() === MNP_COURIER_NAME)
-          .map((order) => order.courierTrackingNo.trim())
-          .filter(Boolean)
-      )
-    );
+    const body = (await request.json().catch(() => ({}))) as { consignments?: unknown };
+    const consignments = normalizeConsignments(body.consignments);
 
     if (consignments.length === 0) {
       return NextResponse.json({ tracking_Details: [] as MnpTrackingDetail[] });
     }
 
-    const results = await getMnpBulkTracking(consignments);
-    const tracking_Details = results.flatMap((result) => result.tracking_Details ?? []);
+    const tracking_Details: MnpTrackingDetail[] = [];
+
+    for (const chunk of chunkArray(consignments, MNP_CONSIGNMENT_CHUNK_SIZE)) {
+      const results = await getMnpBulkTracking(chunk);
+      for (const result of results) {
+        tracking_Details.push(...(result.tracking_Details ?? []));
+      }
+    }
 
     return NextResponse.json({ tracking_Details });
   } catch (error) {

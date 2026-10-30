@@ -42,7 +42,11 @@ import { exportOrdersToExcel } from "@/lib/orders/order-export";
 import { ORDER_STATUS_OPTIONS, isOrderStatusApiValue } from "@/lib/orders/order-status-options";
 import { parseTrackingNumbers } from "@/lib/orders/order-filters";
 import type { OrderStatusApiValue } from "@/lib/orders/order-status-options";
-import { applyMnpTrackingStatus, buildMnpStatusMap, isMnpOrder } from "@/lib/orders/mnp-status";
+import {
+  applyMnpTrackingStatus,
+  buildMnpStatusMap,
+  collectMnpTrackingNumbers,
+} from "@/lib/orders/mnp-status";
 import type { Client } from "@/lib/types/client";
 import type { ClientOrder } from "@/lib/types/order";
 import type { MnpTrackingDetail } from "@/lib/types/mnp";
@@ -400,16 +404,18 @@ export default function AdminOrdersView() {
       const fetchedOrders = paged.items;
       setTotalCount(paged.totalCount);
 
-      if (!fetchedOrders.some(isMnpOrder)) {
+      const consignments = collectMnpTrackingNumbers(fetchedOrders);
+      if (consignments.length === 0) {
         setOrders(fetchedOrders);
       } else {
         try {
-          const mnpTrackingUrl =
-            Number.isInteger(clientId) && clientId > 0
-              ? `/api/orders/mnp-tracking?clientId=${clientId}`
-              : "/api/orders/mnp-tracking";
-          const mnpResponse = await fetch(mnpTrackingUrl, {
-            headers: buildAppAuthHeaders(token, role, user?.userId ?? 0),
+          const mnpResponse = await fetch("/api/orders/mnp-tracking", {
+            method: "POST",
+            headers: {
+              ...buildAppAuthHeaders(token, role, user?.userId ?? 0),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ consignments }),
           });
           const mnpPayload = (await mnpResponse.json().catch(() => null)) as {
             tracking_Details?: MnpTrackingDetail[];
@@ -419,7 +425,7 @@ export default function AdminOrdersView() {
             : new Map<string, string>();
           setOrders(applyMnpTrackingStatus(fetchedOrders, statusMap));
         } catch {
-          // M&P lookup failed — fall back to the backend's dispatch status.
+          // M&P lookup failed — leave courierTrackingStatus empty for this page.
           setOrders(fetchedOrders);
         }
       }
