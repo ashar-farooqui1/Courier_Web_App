@@ -237,8 +237,14 @@ export function normalizeClientOrder(raw: unknown): ClientOrder | null {
 
   return {
     orderId,
+    clientId: pickNumber(record, ['clientId', 'ClientId']),
     awbNo: pickString(record, ['awbNo', 'AwbNo', 'awbNumber', 'AwbNumber']),
-    clientName: pickString(record, ['clientName', 'ClientName']),
+    clientName: pickString(record, [
+      'clientName',
+      'ClientName',
+      'brandName',
+      'BrandName',
+    ]),
     customerName: pickString(record, ['customerName', 'CustomerName']),
     customerPhone: pickString(record, ['customerPhone', 'CustomerPhone']),
     amount: pickNumber(record, ['amount', 'Amount']),

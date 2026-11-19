@@ -7,7 +7,7 @@ import {
   resolveOrdersClientId,
   resolveWriteClientId,
 } from '@/lib/api/app-request-context';
-import { isStaffRole } from '@/lib/auth/role';
+import { isClientRole, isStaffRole } from '@/lib/auth/role';
 import { filterOrdersBySearch } from '@/lib/orders/order-search';
 import {
   filterOrders,
@@ -67,9 +67,10 @@ function readPageParam(value: string | null, fallback: number): number {
 }
 
 /**
- * Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize=&search= (optional ?clientId=).
- * Search-panel filters (awbId, referenceId, trackingNumbers, city, rider, status, dateTo,
- * assignDateFrom, assignDateTo) are applied here across all orders, then paginated.
+ * Proxies GET /api/Order/GetOrders?adminId=&pageNum=&pageSize=&search=.
+ * Client logins use GetOrdersByClient. Admin "Client Name" is a filter on GetOrders
+ * (clientId/clientNames), not a switch to the client-portal endpoint.
+ * Other search-panel filters are applied here across all orders, then paginated.
  */
 export async function GET(request: Request) {
   const token = getBearerToken(request);
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    if (scoped.clientId) {
+    if (isClientRole(ctx.role) && scoped.clientId) {
       // GetOrdersByClient has no search param — filter in this BFF layer.
       const orders = filterOrders(
         filterOrdersBySearch(await getOrdersByClient(scoped.clientId, token), search ?? ''),

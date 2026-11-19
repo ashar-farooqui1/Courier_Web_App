@@ -248,10 +248,12 @@ const StatusMultiSelectFilter = ({
   );
 };
 
-function orderMatchesClientName(order: ClientOrder, clientName: string): boolean {
-  if (!clientName) return true;
-  const orderClientName = order.clientName?.trim().toLowerCase() ?? "";
-  return orderClientName === clientName || orderClientName.includes(clientName);
+function clientFilterNames(client: Client | undefined): string {
+  if (!client) return "";
+  const names = [client.brandName, client.clientName, client.clientCode]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  return Array.from(new Set(names)).join("|");
 }
 
 export default function AdminOrdersView() {
@@ -347,6 +349,10 @@ export default function AdminOrdersView() {
     const clientId = Number(selectedClientId);
     if (Number.isInteger(clientId) && clientId > 0) {
       params.set("clientId", String(clientId));
+      const clientNames = clientFilterNames(
+        clients.find((client) => client.clientId === clientId)
+      );
+      if (clientNames) params.set("clientNames", clientNames);
     }
     if (debouncedSearch) {
       params.set("search", debouncedSearch);
@@ -366,7 +372,7 @@ export default function AdminOrdersView() {
       if (value) params.set(key, value);
     }
     return params.toString();
-  }, [appliedFilters, debouncedSearch, selectedClientId]);
+  }, [appliedFilters, clients, debouncedSearch, selectedClientId]);
 
   const loadOrders = useCallback(async () => {
     if (!ready) return;
@@ -378,7 +384,6 @@ export default function AdminOrdersView() {
       return;
     }
 
-    const clientId = Number(selectedClientId);
     const params = new URLSearchParams(ordersQuery);
     params.set("pageNum", String(page));
     params.set("pageSize", String(pageSize));
@@ -436,7 +441,7 @@ export default function AdminOrdersView() {
     } finally {
       setLoadingOrders(false);
     }
-  }, [ordersQuery, page, pageSize, ready, role, selectedClientId, token, user?.userId]);
+  }, [ordersQuery, page, pageSize, ready, role, token, user?.userId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -460,11 +465,6 @@ export default function AdminOrdersView() {
     client.clientName?.trim() ||
     client.clientCode ||
     `Client #${client.clientId}`;
-
-  const selectedClient = useMemo(
-    () => clients.find((client) => String(client.clientId) === selectedClientId),
-    [clients, selectedClientId]
-  );
 
   const cityOptions = useMemo(() => {
     const set = new Set<string>();
@@ -522,14 +522,8 @@ export default function AdminOrdersView() {
     handleSearch();
   };
 
-  // Safety net: the API's ?clientId= filter isn't always honored by the
-  // backend, so also match on client name client-side.
-  const selectedClientName = selectedClient ? clientLabel(selectedClient).trim().toLowerCase() : "";
-  const matchesSelectedClient = (order: ClientOrder) =>
-    orderMatchesClientName(order, selectedClientName);
-
   // Toolbar SEARCH and the search-panel filters are applied server-side (see ordersQuery).
-  const filteredOrders = orders.filter(matchesSelectedClient);
+  const filteredOrders = orders;
 
   useEffect(() => {
     orders.forEach((order) => knownOrdersRef.current.set(order.orderId, order));
@@ -588,7 +582,7 @@ export default function AdminOrdersView() {
         throw new Error(parseApiErrorMessage(payload, `Failed to load orders (${response.status})`));
       }
 
-      const allOrders = unwrapPagedOrders(payload).items.filter(matchesSelectedClient);
+      const allOrders = unwrapPagedOrders(payload).items;
       allOrders.forEach((order) => {
         // Keep page copies — they may carry the M&P tracking status.
         if (!knownOrdersRef.current.has(order.orderId)) {

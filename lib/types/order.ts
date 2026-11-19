@@ -61,6 +61,7 @@ export interface UpdateOrderStatusApiResponse {
 
 export interface ClientOrder {
   orderId: number;
+  clientId: number;
   awbNo: string;
   clientName: string;
   customerName: string;
