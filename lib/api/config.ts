@@ -158,4 +158,14 @@ export const API_ROUTES = {
   removeOrdersFromLoadsheet: "/api/Order/RemoveOrdersFromLoadsheet",
   generateLoadsheetPdf: (loadsheetId: number | string) =>
     `/api/Order/GenerateLoadsheetPdf?loadsheetId=${loadsheetId}`,
+
+  /** Client role only — clientId comes from the JWT. */
+  shopifyConnectionKey: "/api/ShopifyIntegration/ConnectionKey",
+  shopifyConnections: "/api/ShopifyIntegration/Connections",
+  shopifyRevokeConnection: (shopifyConnectionId: number | string) =>
+    `/api/ShopifyIntegration/Connections/${shopifyConnectionId}/Revoke`,
 } as const;
+
+/** Public listing / install link of the Stallionex Shopify app. */
+export const SHOPIFY_APP_URL =
+  process.env.NEXT_PUBLIC_SHOPIFY_APP_URL ?? "https://apps.shopify.com/";

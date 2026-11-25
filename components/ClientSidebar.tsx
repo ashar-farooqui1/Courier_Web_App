@@ -12,6 +12,7 @@ import {
   Webhook,
   LogOut,
   FileStack,
+  ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AppLogo from "@/components/AppLogo";
@@ -41,6 +42,7 @@ const CLIENT_NAV: ClientNavItem[] = [
   { icon: <CircleDot size={20} />, label: "Replacement Document", href: "/documents/replacement", indent: true },
   { icon: <Users size={20} />, label: "Invoices", href: "/dashboard/invoices" },
   { icon: <CircleDot size={20} />, label: "Invoice Report", href: "/reports/orders-invoice" },
+  { icon: <ShoppingBag size={20} />, label: "Shopify Integration", href: "/dashboard/shopify" },
   { icon: <Webhook size={20} />, label: "Web Hook", href: "/dashboard/webhook" },
 ];
 
